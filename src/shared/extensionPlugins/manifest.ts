@@ -86,6 +86,8 @@ export interface PluginViewContrib {
   id: string;
   title: string;
   entry: string;
+  /** Omitted keeps the legacy right sidebar. Activitybar views own a workspace page. */
+  location?: 'sidebar' | 'activitybar';
 }
 /** 按扩展名打开文件的查看器；页面和侧栏页面一样跑在沙箱 iframe 里 */
 export interface PluginFileViewerContrib {
@@ -563,10 +565,17 @@ export function parseExtensionPluginManifest(
       !LOCAL_ID.test(v.id) ||
       !isNonEmptyString(v.title, 40) ||
       !isPluginRelativePath(v.entry) ||
-      !v.entry.endsWith('.html')
+      !v.entry.endsWith('.html') ||
+      (v.location !== undefined && v.location !== 'sidebar' && v.location !== 'activitybar')
     )
       errors.push('侧栏页面不合法');
-    else views.push({ id: v.id, title: v.title as string, entry: v.entry });
+    else
+      views.push({
+        id: v.id,
+        title: v.title as string,
+        entry: v.entry,
+        ...(v.location !== undefined ? { location: v.location } : {}),
+      });
   }
   uniqueIds(views, '侧栏页面');
 

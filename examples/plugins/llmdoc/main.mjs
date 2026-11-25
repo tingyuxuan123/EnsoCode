@@ -10,6 +10,9 @@ import { createRuntimeSetup } from './setup.mjs';
 const CLI_VERSION = '3.6.0';
 const CLI_TIMEOUT = 5_000;
 const OUTPUT_BYTES = 48 * 1024;
+// Transport is not a preview: the CLI emits whole bodies and unpaginated Git path lists.
+// Parse complete JSON first, then bound the public response below.
+const CLI_OUTPUT_BYTES = 8 * 1024 * 1024;
 /** Narrowing stops here: one row still has to fit, and a page below it is not useful. */
 const MIN_NARROWED_LIMIT = 1;
 const MAX_ENTRIES = 1_000;
@@ -18,6 +21,7 @@ const CONTROL = /[\p{Cc}\p{Cf}]/u;
 const CURSOR = /^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/;
 const CURSOR_PLACEHOLDERS = new Set(['', '0', 'null', 'undefined']);
 const READ_GIT = fileURLToPath(new URL('./read-git.cjs', import.meta.url));
+const RUN_CLI = fileURLToPath(new URL('./run-cli.mjs', import.meta.url));
 const GIT_GUARD_MARKER = 'LLMDOC_READ_GIT_ERROR: ';
 const OPS = {
   tree: { keys: ['cursor'], limit: 30, budget: 1400 },
@@ -394,7 +398,16 @@ function execute({ node, entry, modules }, root, op, args, signal, gitRuntime, l
       argv.push(`--allow-fs-read=${join(gitRuntime.metadata, path)}`);
     }
   }
-  argv.push(entry, '--json', '--limit', String(limit), '--budget', String(budget));
+  argv.push(
+    `--allow-fs-read=${RUN_CLI}`,
+    RUN_CLI,
+    entry,
+    '--json',
+    '--limit',
+    String(limit),
+    '--budget',
+    String(budget)
+  );
   if (args.cursor) argv.push('--cursor', args.cursor);
   if (op === 'tree') argv.push('tree', '--docs');
   if (args.query !== undefined) argv.push('search', '--', args.query);
@@ -429,7 +442,7 @@ function execute({ node, entry, modules }, root, op, args, signal, gitRuntime, l
         signal,
         timeout: CLI_TIMEOUT,
         killSignal: 'SIGKILL',
-        maxBuffer: OUTPUT_BYTES,
+        maxBuffer: CLI_OUTPUT_BYTES,
         encoding: 'utf8',
       },
       (error, stdout, stderr) => {
@@ -445,7 +458,7 @@ function execute({ node, entry, modules }, root, op, args, signal, gitRuntime, l
         if (!error) return resolve({ stdout, exitCode: 0 });
         if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
           return reject(
-            Object.assign(new Error('llmdoc 输出超过 48 KiB；请缩小搜索范围或拆分过长文档。'), {
+            Object.assign(new Error('llmdoc 原始输出超过 8 MiB 安全上限；本次未返回部分 JSON。'), {
               code: 'OUTPUT_TOO_LARGE',
             })
           );
@@ -507,7 +520,19 @@ function projectResult(raw, op, args, ids) {
     }
     return result;
   });
-  if (op !== 'show') return { entries, total: page.totalItems, nextCursor: page.nextCursor };
+  if (op !== 'show') {
+    return {
+      entries,
+      total: page.totalItems,
+      nextCursor: page.nextCursor,
+      ...(op === 'search' && page.totalItems === 0
+        ? {
+            indexedDocuments: ids.size,
+            hint: `没有匹配文档。仅检索当前知识地图中的 ${ids.size} 篇文档，不会自动索引源码或聊天。无命中不代表源码中没有此功能；请继续核对源码，需要补充知识时使用“复核与更新”，确认预览后再写入。`,
+          }
+        : {}),
+    };
+  }
   const row = documents[0];
   if (
     !isRecord(row) ||
@@ -526,16 +551,14 @@ function projectResult(raw, op, args, ids) {
 /**
  * Whether an overflowed list read may be retried with fewer rows.
  *
- * The pinned CLI budgets characters, not bytes, so documents with Chinese text can pass its own
- * budget and still exceed the subprocess buffer. Only list reads can narrow: `show` and the
- * diagnostic reports are single payloads whose size the caller cannot control, and returning a
- * silently shorter list would look like a complete answer.
+ * Keep paginated document rows intact: narrowing must happen in the CLI so its cursor stays valid.
+ * Unpaginated diagnostic details are explicitly sampled separately, never silently dropped.
  *
  * @param {Operation} op @param {number} limit
  */
 function canNarrow(op, limit) {
   return (
-    (op === 'tree' || op === 'search' || op === 'context') &&
+    (op === 'tree' || op === 'search' || op === 'context' || op === 'delta') &&
     limit > MIN_NARROWED_LIMIT &&
     OPS[op].limit > MIN_NARROWED_LIMIT
   );
@@ -639,6 +662,71 @@ function diagnosticResult(stdout, exitCode, operation) {
   return { operation, result, exitCode };
 }
 
+/** @param {unknown} value */
+const jsonBytes = (value) => Buffer.byteLength(JSON.stringify(value), 'utf8');
+
+/**
+ * Retain summary scalars and exit codes; only sample diagnostic detail arrays when necessary.
+ * Never sample root paginated rows: doing so would skip documents at the next CLI cursor.
+ * @param {{operation: Operation, result: Record<string, unknown>, exitCode: number}} payload
+ */
+function reportPreview(payload) {
+  if (jsonBytes(payload) <= OUTPUT_BYTES) return payload;
+  const { result, operation } = payload;
+  const protectedArrays = new Set(
+    operation === 'context'
+      ? ['impacted', 'prerequisites']
+      : operation === 'delta'
+        ? ['impacted', 'needsReview']
+        : []
+  );
+  const unmapped = result.unmapped;
+  const preview = {
+    ...payload,
+    ...(isRecord(unmapped) && Array.isArray(unmapped.committed) && Array.isArray(unmapped.dirty)
+      ? { unmappedCounts: { committed: unmapped.committed.length, dirty: unmapped.dirty.length } }
+      : {}),
+    truncatedFields: [],
+  };
+  const cuts = new Map();
+  while (jsonBytes(preview) > OUTPUT_BYTES) {
+    const candidates = [];
+    const visit = (value, path = '') => {
+      if (Array.isArray(value)) {
+        if (!protectedArrays.has(path) && value.length > 1) {
+          candidates.push({ value, path, bytes: jsonBytes(value) });
+        }
+        for (let i = 0; i < value.length; i++) visit(value[i], `${path}.${i}`);
+      } else if (isRecord(value)) {
+        for (const [key, child] of Object.entries(value))
+          visit(child, path ? `${path}.${key}` : key);
+      }
+    };
+    visit(result);
+    const largest = candidates.sort((a, b) => b.bytes - a.bytes)[0];
+    if (!largest) throw responseTooLarge();
+    const totalItems = cuts.get(largest.path)?.totalItems ?? largest.value.length;
+    const returnedItems = Math.min(30, Math.ceil(largest.value.length / 2));
+    largest.value.length = returnedItems;
+    // Cuts inside discarded rows are no longer visible; don't advertise them as retained.
+    for (const key of cuts.keys()) {
+      if (
+        key.startsWith(`${largest.path}.`) &&
+        Number(key.slice(largest.path.length + 1).split('.')[0]) >= returnedItems
+      )
+        cuts.delete(key);
+    }
+    cuts.set(largest.path, { path: largest.path, totalItems, returnedItems });
+    preview.truncatedFields = [...cuts.values()];
+  }
+  return preview;
+}
+
+const responseTooLarge = () =>
+  Object.assign(new Error('llmdoc 单项预览超过 48 KiB 安全上限；请按具体文档或源码路径查询。'), {
+    code: 'OUTPUT_TOO_LARGE',
+  });
+
 /** @param {import('../../../types/enso-plugin').PluginMainApi} enso */
 export function activate(enso) {
   const setup = createRuntimeSetup({
@@ -676,7 +764,24 @@ export function activate(enso) {
           for (;;) {
             let output;
             try {
-              output = await execute(runtime, root, op, args, ctx.signal, gitRuntime, limit);
+              const { stdout, exitCode } = await execute(
+                runtime,
+                root,
+                op,
+                args,
+                ctx.signal,
+                gitRuntime,
+                limit
+              );
+              const result =
+                op === 'tree' || op === 'search' || op === 'show'
+                  ? projectResult(stdout, op, args, ids)
+                  : reportPreview(diagnosticResult(stdout, exitCode, op));
+              output =
+                limit === OPS[op].limit || !isRecord(result)
+                  ? result
+                  : { ...result, narrowed: true, limit };
+              if (jsonBytes(output) > OUTPUT_BYTES) throw responseTooLarge();
             } catch (error) {
               // Only a list page can retry with fewer rows; a whole document stays refused.
               if (!(error instanceof Error) || error.code !== 'OUTPUT_TOO_LARGE') throw error;
@@ -684,15 +789,7 @@ export function activate(enso) {
               limit = Math.max(MIN_NARROWED_LIMIT, Math.floor(limit / 2));
               continue;
             }
-            const { stdout, exitCode } = output;
-            const result =
-              op === 'tree' || op === 'search' || op === 'show'
-                ? projectResult(stdout, op, args, ids)
-                : diagnosticResult(stdout, exitCode, op);
-            // Say so in the payload: the list is real, just not the requested page size.
-            return limit === OPS[op].limit || !isRecord(result)
-              ? result
-              : { ...result, narrowed: true, limit };
+            return output;
           }
         } catch (error) {
           if (error instanceof SyntaxError) throw badOutput();
@@ -743,7 +840,9 @@ export function activate(enso) {
       return {
         impacted,
         needsReview,
-        unmapped: committed.length + dirty.length,
+        unmapped: isRecord(outcome.unmappedCounts)
+          ? outcome.unmappedCounts.committed + outcome.unmappedCounts.dirty
+          : committed.length + dirty.length,
       };
     },
   });

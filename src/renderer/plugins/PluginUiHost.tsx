@@ -15,7 +15,9 @@ import { disposePluginRenderer, rendererPluginKey, syncPluginRenderers } from '.
 import { handleSessionRequest, type SessionRequest } from './sessionBridge';
 import { pluginStatusRefs, setPluginStatusItems } from './statusItems';
 import { setPluginTriggers } from './triggers';
+import type { PluginViewRef } from './viewBridge';
 import { setPluginViews } from './viewBridge';
+import { closePluginWorkspace, openPluginWorkspace } from './workspaceViews';
 
 /** One host per window; generation checks revoke in-flight module initialization. */
 export function PluginUiHost() {
@@ -28,7 +30,7 @@ export function PluginUiHost() {
     const controller = new AbortController();
     const handles = new Map<string, { key: string; dispose(): void }>();
     const activeKeys = new Map<string, string>();
-    let currentViews: { pluginId: string; id: string; title: string }[] = [];
+    let currentViews: PluginViewRef[] = [];
     const clear = () => {
       controller.abort();
       activeKeys.clear();
@@ -65,6 +67,7 @@ export function PluginUiHost() {
           currentViews = enabled.flatMap((plugin) =>
             plugin.views.map((view) => ({
               pluginId: plugin.id,
+              pluginName: plugin.name,
               ...(plugin.icon ? { icon: plugin.icon } : {}),
               ...view,
             }))
@@ -179,11 +182,18 @@ export function PluginUiHost() {
               (item) => item.pluginId === view.pluginId && item.id === view.viewId
             );
             if (!known) return false;
+            if (known.location === 'activitybar') {
+              // A background conversation cannot retarget a visible workspace's project context.
+              if (useSessionsStore.getState().activeId !== sessionId) return false;
+              return openPluginWorkspace(known, sessionId);
+            }
             openSidePanelPluginView({ conversationId: sessionId, ...view, title: known.title });
             return true;
           },
-          closePluginView: (sessionId, view) =>
-            closeSidePanelPluginView({ conversationId: sessionId, ...view }),
+          closePluginView: (sessionId, view) => {
+            closePluginWorkspace({ sessionId, ...view });
+            closeSidePanelPluginView({ conversationId: sessionId, ...view });
+          },
         })
           .catch((error: unknown) => ({
             ok: false as const,

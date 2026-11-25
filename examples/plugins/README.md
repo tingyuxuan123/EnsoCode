@@ -15,6 +15,7 @@
 | `word-stats` | 只统计工具收到的文本；本插件工具卡、`enso.example.wordstats:bars` 代码块；只读预设及附带 skill/指令/角色 |
 | `snippets` | `#review` / `#tests` 补全、输入框右按钮、回复右侧操作；读草稿后带 generation/rev 写入 |
 | `notes` | 侧栏 `+` → Local Notes；opaque-origin sandbox 页面经固定 MessagePort 调本插件，私有目录保存便签 |
+| [`memory`](memory/README.md) | 完整本地记忆：长期记忆、每日日志、待办、回收站、BM25 检索、每轮上下文、自动学习与会话总结；自动模型调用有费用与隐私提示 |
 | [`llmdoc`](llmdoc/README.md) | 本机 Git 工作树的知识地图、源码反查、变更复核和维护草稿；需独立配置固定版本 CLI |
 
 ### 浏览器业务插件（需新宿主能力，先用测试副本）

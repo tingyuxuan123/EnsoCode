@@ -1,4 +1,6 @@
+import type { PluginViewContrib } from '@shared/extensionPlugins/manifest';
 import { useSyncExternalStore } from 'react';
+import { reconcilePluginWorkspace } from './workspaceViews';
 
 export type ViewReply =
   | { id: string | number; ok: true; value: unknown }
@@ -74,7 +76,11 @@ export function viewStoragePatch(data: unknown): Record<string, string | null> |
   }
   return Object.fromEntries(entries);
 }
-export const viewThemePush = (theme: 'light' | 'dark') => ({ type: 'enso-theme' as const, theme });
+export const viewThemePush = (theme: 'light' | 'dark', variables?: Record<string, string>) => ({
+  type: 'enso-theme' as const,
+  theme,
+  ...(variables ? { variables } : {}),
+});
 export const viewEventPush = (name: string, data: unknown) => ({
   type: 'enso-view-event' as const,
   name,
@@ -97,7 +103,7 @@ export function viewFileEdit(data: unknown): string | null {
     return null;
   return new TextEncoder().encode(data.text).length <= 2 * 1024 * 1024 ? data.text : null;
 }
-export interface PluginViewRef {
+export interface PluginViewRef extends PluginViewContrib {
   build?: string;
   pluginId: string;
   pluginName: string;
@@ -111,6 +117,7 @@ let views: PluginViewRef[] = [];
 const listeners = new Set<() => void>();
 export function setPluginViews(next: PluginViewRef[]): void {
   views = next;
+  reconcilePluginWorkspace(next);
   for (const listener of listeners) listener();
 }
 const snapshot = () => views;

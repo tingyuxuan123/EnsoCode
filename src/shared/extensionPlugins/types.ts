@@ -1,4 +1,9 @@
-import type { ExtensionPluginPermission, PluginConfigType, PluginTriggerSymbol } from './manifest';
+import type {
+  ExtensionPluginPermission,
+  PluginConfigType,
+  PluginTriggerSymbol,
+  PluginViewContrib,
+} from './manifest';
 import type { MarketCategory, MarketScreenshot } from './marketCategories';
 import type { PluginStatusItem } from './statusItems';
 
@@ -24,7 +29,7 @@ export interface ExtensionPluginSummary {
   tools: { name: string; description: string }[];
   commands: { id: string; title: string; key?: string }[];
   /** entry 是安装目录内的相对路径，渲染层经 asset 通道取内容 */
-  views: { id: string; title: string; entry: string }[];
+  views: PluginViewContrib[];
   /** 按扩展名打开文件的查看器；entry 同 views */
   fileViewers: {
     id: string;

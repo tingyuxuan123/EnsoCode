@@ -70,7 +70,15 @@ import { cn } from '@/lib/utils';
 import { PluginNotices } from '@/plugins/PluginNotices';
 import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import { PluginUiHost } from '@/plugins/PluginUiHost';
+import { PluginWorkspacePage } from '@/plugins/PluginWorkspacePage';
 import { SessionActivityAttributes } from '@/plugins/SessionActivityAttributes';
+import { usePluginViews } from '@/plugins/viewBridge';
+import {
+  activitybarPluginViews,
+  closePluginWorkspace,
+  openPluginWorkspace,
+  usePluginWorkspace,
+} from '@/plugins/workspaceViews';
 import { initDevices } from '@/stores/devices';
 import { bindPairCatalogSync } from '@/stores/pairCatalog';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
@@ -114,6 +122,7 @@ export default function App() {
   const extensionRequestSerial = useRef(0);
   const extensionNavigationMounted = useRef(false);
   const closeWorkspacePage = useCallback(() => {
+    closePluginWorkspace();
     setExtensionsOpen(false);
     setExtensionRequest(undefined);
     closeDesignGallery();
@@ -135,6 +144,7 @@ export default function App() {
         const nodes = useRemoteNodesStore.getState();
         if (nodes.activeNodeId !== 'local') nodes.switchNode('local');
         closeDesignGallery();
+        closePluginWorkspace();
         useImageStudioStore.getState().setOpen(false);
         setExtensionRequest({
           serial: ++extensionRequestSerial.current,
@@ -163,6 +173,8 @@ export default function App() {
   const [sidebarView, setSidebarView] = useState<SidebarView>('projects');
   const { t } = useI18n();
   const activeConversationId = useSessionsStore((s) => s.activeId);
+  const pluginViews = usePluginViews();
+  const pluginWorkspace = usePluginWorkspace();
   const activeTabId = useSessionsStore((s) =>
     s.activeId ? s.conversations[s.activeId]?.activeTabId : undefined
   );
@@ -172,6 +184,7 @@ export default function App() {
     const previous = lastSessionSelection.current;
     if (previous.id !== activeConversationId || previous.tab !== activeTabId) closeDesignGallery();
     if (isExtensionsSessionNavigation(previous, { id: activeConversationId, tab: activeTabId })) {
+      closePluginWorkspace();
       setExtensionsOpen(false);
       setExtensionRequest(undefined);
     }
@@ -309,30 +322,45 @@ export default function App() {
   useEffect(() => useRemoteNodesStore.getState().bind(), []);
   const activeNodeId = useRemoteNodesStore((s) => s.activeNodeId);
   const remoteNodeActive = activeNodeId !== 'local';
+  const activePluginView = pluginWorkspace
+    ? activitybarPluginViews(pluginViews).find(
+        (view) => view.pluginId === pluginWorkspace.pluginId && view.id === pluginWorkspace.viewId
+      )
+    : undefined;
+  const pluginActive = !remoteNodeActive && !!activePluginView;
   const designEnabled = useSettingsStore((s) => s.designEnabled);
   const galleryAvailable = isDesignGalleryAvailable({
     designEnabled,
     remoteNodeActive,
   });
   const workspaceView = useDesignRegistry((s) => s.ui.workspaceView);
-  const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID;
+  const galleryActive = galleryAvailable && workspaceView === GALLERY_VIEW_ID && !pluginActive;
   const studioOpen = useImageStudioStore((s) => s.open);
   const studioHistoryOpen = useImageStudioStore((s) => s.historyOpen);
   const studioTitle = useImageStudioStore((s) =>
     s.activeId ? s.sessions[s.activeId]?.title : undefined
   );
-  const studioActive = studioOpen && !remoteNodeActive && !galleryActive;
+  const studioActive = studioOpen && !remoteNodeActive && !galleryActive && !pluginActive;
   const activePanelOpen = studioActive ? studioHistoryOpen : sideOpen;
   // 与 Code 共用自动收放：只恢复为当前面板临时收起的侧栏，不覆盖用户手动收起。
   useEffect(() => {
     if (!activePanelOpen && sidebarAuto) useSidebarStore.getState().autoRestore();
   }, [activePanelOpen, sidebarAuto]);
-  const extensionsActive = extensionsOpen && !remoteNodeActive && !galleryActive && !studioActive;
+  const extensionsActive =
+    extensionsOpen && !remoteNodeActive && !galleryActive && !studioActive && !pluginActive;
+  useEffect(() => {
+    if (!pluginWorkspace) return;
+    setExtensionsOpen(false);
+    setExtensionRequest(undefined);
+    closeDesignGallery();
+    useImageStudioStore.getState().setOpen(false);
+  }, [pluginWorkspace]);
   useEffect(() => {
     if (remoteNodeActive || galleryActive) useImageStudioStore.getState().setOpen(false);
   }, [remoteNodeActive, galleryActive]);
   useEffect(() => {
     if (remoteNodeActive || galleryActive) {
+      closePluginWorkspace();
       setExtensionsOpen(false);
       setExtensionRequest(undefined);
     }
@@ -409,7 +437,9 @@ export default function App() {
       )
         return;
       if (
-        (extensionsActive || useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID) &&
+        (extensionsActive ||
+          pluginActive ||
+          useDesignRegistry.getState().ui.workspaceView === GALLERY_VIEW_ID) &&
         [
           'toggle-side-panel',
           'toggle-side-panel-fullscreen',
@@ -482,10 +512,18 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [closeWorkspacePage, extensionsActive, keybindings, sidebarView]);
+  }, [closeWorkspacePage, extensionsActive, pluginActive, keybindings, sidebarView]);
 
   useEffect(() => {
-    if (!sideOpen || !sideFullscreen || galleryActive || extensionsActive || studioActive) return;
+    if (
+      !sideOpen ||
+      !sideFullscreen ||
+      galleryActive ||
+      extensionsActive ||
+      studioActive ||
+      pluginActive
+    )
+      return;
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (useRemoteNodesStore.getState().activeNodeId !== 'local') return;
@@ -494,7 +532,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
-  }, [sideOpen, sideFullscreen, galleryActive, extensionsActive, studioActive]);
+  }, [sideOpen, sideFullscreen, galleryActive, extensionsActive, studioActive, pluginActive]);
 
   // 拖拽：侧栏项目排序 / 会话拖入 Composer / 拖到 Pinned 区。
   // 6px 启动阈值：行点击与行内按钮不受影响。onDragEnd 在 Sidebar 的 useDndMonitor 里。
@@ -506,7 +544,7 @@ export default function App() {
   const codeRail = remoteNodeActive
     ? undefined
     : {
-        active: !studioActive && !galleryActive && !extensionsActive,
+        active: !studioActive && !galleryActive && !extensionsActive && !pluginActive,
         onToggle: () => {
           closeWorkspacePage();
         },
@@ -525,7 +563,7 @@ export default function App() {
     </button>
   ) : galleryActive ? (
     <DesignGalleryHeader side="right" />
-  ) : extensionsActive || remoteNodeActive ? undefined : (
+  ) : extensionsActive || remoteNodeActive || pluginActive ? undefined : (
     <>
       <DesignCanvasHeaderAction />
       <button
@@ -547,6 +585,7 @@ export default function App() {
     // 不能给外壳刷实底：浏览器 guest 沉到 workbench 之下时，这里任何不透明像素都会盖住挖孔
     <div data-enso="canvas" className="relative isolate flex h-screen flex-col text-foreground">
       <PluginThemeHost />
+      {!remoteNodeActive && <PluginUiHost />}
       <SessionActivityAttributes />
       <PluginNotices />
       <DesignRuntimeHost />
@@ -564,6 +603,8 @@ export default function App() {
             <span className="truncate text-[calc(13rem/14)] font-medium">
               {studioTitle || t('Image studio')}
             </span>
+          ) : pluginActive ? (
+            <span className="truncate font-medium text-sm">{activePluginView?.title}</span>
           ) : extensionsActive ? (
             <span className="truncate font-medium text-sm">{t('Extensions')}</span>
           ) : undefined
@@ -574,8 +615,8 @@ export default function App() {
           （留缝、圆角与裁切见 globals.css 的 workbench-card 规则）。 */}
       <div className="flex min-h-0 flex-1">
         <AppRail
-          sidebarCollapsed={remoteNodeActive ? undefined : collapsed}
-          onToggleSidebar={remoteNodeActive ? undefined : toggleSidebar}
+          sidebarCollapsed={remoteNodeActive || pluginActive ? undefined : collapsed}
+          onToggleSidebar={remoteNodeActive || pluginActive ? undefined : toggleSidebar}
           onOpenSearch={
             remoteNodeActive
               ? undefined
@@ -612,6 +653,25 @@ export default function App() {
               : undefined
           }
           codeWorkspace={codeRail}
+          pluginViews={
+            remoteNodeActive
+              ? undefined
+              : activitybarPluginViews(pluginViews).map((view) => ({
+                  ...view,
+                  active:
+                    pluginActive &&
+                    activePluginView?.pluginId === view.pluginId &&
+                    activePluginView?.id === view.id,
+                  onToggle: () => {
+                    const selected =
+                      pluginActive &&
+                      activePluginView?.pluginId === view.pluginId &&
+                      activePluginView?.id === view.id;
+                    closeWorkspacePage();
+                    if (!selected) openPluginWorkspace(view, activeConversationId);
+                  },
+                }))
+          }
         />
         {remoteNodeActive ? (
           // 远程节点态：整块换成对方的目录与会话；本机 Sidebar/ChatView/SidePanel 卸载
@@ -629,7 +689,7 @@ export default function App() {
           <DndContext sensors={dndSensors} collisionDetection={dndCollision}>
             {/* 画廊是全屏接管：不渲染聊天项目侧栏和它的手柄，让画廊从图标轨右侧铺满。
                 只是这次渲染不挂载，宽度和折叠偏好仍留在 state / localStorage 里。 */}
-            {!galleryActive && (
+            {!galleryActive && !pluginActive && (
               <>
                 <div
                   className="flex min-h-0 shrink-0"
@@ -642,12 +702,12 @@ export default function App() {
                     collapsed={collapsed}
                     view={sidebarView}
                     onViewChange={(view) => {
-                      if (extensionsActive) setExtensionsOpen(false);
+                      closeWorkspacePage();
                       setSidebarView(view);
                     }}
                     extensionsActive={extensionsActive}
                     onToggleExtensions={() => {
-                      closeDesignGallery();
+                      closeWorkspacePage();
                       setExtensionRequest(undefined);
                       setExtensionsOpen(!extensionsActive);
                     }}
@@ -671,7 +731,7 @@ export default function App() {
               data-slot="workbench-main"
               data-enso="main"
               data-workbench-card=""
-              data-workbench-split={galleryActive ? undefined : ''}
+              data-workbench-split={galleryActive || pluginActive ? undefined : ''}
               className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
             >
               {galleryActive ? (
@@ -682,7 +742,7 @@ export default function App() {
                     data-workbench-pane=""
                     className={cn(
                       'min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-                      extensionsActive ? 'hidden' : 'flex'
+                      extensionsActive || pluginActive ? 'hidden' : 'flex'
                     )}
                   >
                     <ChatView />
@@ -695,7 +755,14 @@ export default function App() {
                       <ExtensionsPage onBack={closeWorkspacePage} request={extensionRequest} />
                     </div>
                   )}
-                  {sideOpen && !sideFullscreen && !extensionsActive && (
+                  {pluginActive && activePluginView && pluginWorkspace && (
+                    <PluginWorkspacePage
+                      view={activePluginView}
+                      sessionId={pluginWorkspace.sessionId}
+                      onBack={closeWorkspacePage}
+                    />
+                  )}
+                  {sideOpen && !sideFullscreen && !extensionsActive && !pluginActive && (
                     <ResizeHandle
                       onResize={handleSideResize}
                       onResizingChange={handleSideResizing}
@@ -705,9 +772,8 @@ export default function App() {
                   <SidePanel
                     width={sideWidth}
                     resizing={sideResizing}
-                    workspaceHidden={extensionsActive}
+                    workspaceHidden={extensionsActive || pluginActive}
                   />
-                  <PluginUiHost />
                 </>
               )}
             </div>

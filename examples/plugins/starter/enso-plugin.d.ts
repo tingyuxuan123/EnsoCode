@@ -302,8 +302,9 @@ export interface PluginMainApi {
     notify(title: string, body?: string): Promise<null>;
     view: {
       emit(name: string, data?: unknown): Promise<null>;
+      /** 按 contributes.views[].location 打开右侧栏或最左图标轨的工作区；仍须有效会话调用。 */
       open(input?: string | { viewId?: string; sessionId?: string }): Promise<null>;
-      /** 关掉本插件的侧栏页面；右侧栏是 `open` 为它打开的就一并收起 */
+      /** 关闭匹配本插件/页面/会话的视图；侧栏仅在原先由本插件打开时一并收起。 */
       close(input?: string | { viewId?: string; sessionId?: string }): Promise<null>;
     };
     status: { update(id: string, patch: PluginStatusPatch): Promise<null> };
@@ -388,6 +389,7 @@ export type PluginOnLoad = (enso: PluginRendererApi) => Awaitable<void | Dispose
 
 /** `window.enso` in a plugin's sandboxed sidebar HTML, not in its ui.js. */
 export interface PluginViewApi {
+  /** 当前浅深模式；背景、文字、强调色、字体等宿主 CSS 变量自动同步到沙箱根元素。 */
   readonly theme: 'light' | 'dark';
   call(method: string, args?: unknown): Promise<unknown>;
   onTheme(listener: (theme: 'light' | 'dark') => void): Dispose;

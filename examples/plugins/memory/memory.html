@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CodeKiln 记忆</title>
+  <style>
+    :root { color-scheme:light;
+      --memory-bg:var(--panel,var(--background,#f5f8fa)); --memory-surface:var(--card,#fff);
+      --memory-fg:var(--foreground,#1b2632); --memory-muted:var(--muted-foreground,#576675);
+      --memory-line:var(--border,#cddbe4); --memory-primary:var(--primary,#408abf);
+      --memory-on-primary:var(--primary-foreground,#fff); --memory-brand:var(--brand,var(--primary,#408abf));
+      --memory-wash:var(--accent,#dfe7ec); --memory-danger:var(--destructive,#ad4b53);
+      --memory-radius:var(--radius,6px);
+    }
+    :root[data-theme="dark"] { color-scheme:dark;
+      --memory-bg:var(--panel,var(--background,#141416)); --memory-surface:var(--card,#212124);
+      --memory-fg:var(--foreground,#e6e6e7); --memory-muted:var(--muted-foreground,#ababad);
+      --memory-line:var(--border,#ffffff1f); --memory-primary:var(--primary,#e6e6e7);
+      --memory-on-primary:var(--primary-foreground,#141416); --memory-brand:var(--brand,var(--primary,#e6e6e7));
+      --memory-wash:var(--accent,#ffffff0f); --memory-danger:var(--destructive,#ea8a7d);
+    }
+    * { box-sizing:border-box; }
+    html { font-size:var(--font-size-base,14px); background:var(--memory-bg); }
+    body { width:100%; max-width:1120px; margin:0 auto; padding:28px 32px 40px; background:var(--memory-bg); color:var(--memory-fg); font-family:var(--font-family-sans,-apple-system,system-ui,sans-serif); font-size:calc(13rem / 14); line-height:1.5; -webkit-font-smoothing:antialiased; }
+    button,input,select,textarea { font:inherit; color:inherit; }
+    button { cursor:pointer; border:1px solid var(--memory-line); border-radius:var(--memory-radius); background:var(--memory-surface); padding:6px 10px; }
+    button:hover { border-color:var(--memory-primary); }
+    button:disabled { opacity:.48; cursor:default; }
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:2px solid var(--ring,var(--memory-primary)); outline-offset:2px; }
+    button.primary { background:var(--memory-primary); color:var(--memory-on-primary); border-color:var(--memory-primary); font-weight:600; }
+    button.danger { color:var(--memory-danger); }
+    button.small { padding:3px 8px; font-size:calc(12rem / 14); }
+    input,select,textarea { min-width:0; border:1px solid var(--memory-line); border-radius:var(--memory-radius); padding:8px 9px; background:var(--memory-surface); }
+    input[type="checkbox"] { accent-color:var(--memory-primary); width:16px; height:16px; }
+    h1 { font-size:calc(22rem / 14); letter-spacing:-.5px; margin:0; font-weight:600; }
+    h2 { font-size:calc(15rem / 14); margin:0 0 8px; }
+    p { margin:6px 0; }
+    .muted { color:var(--memory-muted); font-size:calc(12rem / 14); }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .between { justify-content:space-between; }
+    .heading { margin-bottom:18px; }
+    .badge { color:var(--memory-brand); background:var(--memory-wash); border-radius:var(--memory-radius); padding:2px 7px; font-size:calc(11rem / 14); }
+    .project { overflow-wrap:anywhere; margin-top:4px; }
+    #tabs { display:flex; gap:2px; border-bottom:1px solid var(--memory-line); padding-bottom:7px; margin:18px 0; overflow-x:auto; }
+    #tabs button { white-space:nowrap; border:0; background:transparent; padding:6px 12px; color:var(--memory-muted); }
+    #tabs button[aria-selected="true"] { background:var(--memory-wash); color:var(--memory-brand); font-weight:600; }
+    #search { width:100%; }
+    .filters { margin:10px 0 14px; }
+    .filters select { max-width:46%; padding:5px 7px; }
+    .item { padding:18px 0; border-bottom:1px solid var(--memory-line); }
+    .item:first-child { padding-top:4px; }
+    .meta { display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--memory-muted); font-size:calc(11rem / 14); }
+    .body { white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0 12px; }
+    .done .body { text-decoration:line-through; opacity:.65; }
+    .empty { padding:48px 12px; text-align:center; color:var(--memory-muted); }
+    .empty strong { display:block; color:var(--memory-fg); font-size:calc(15rem / 14); margin-bottom:8px; }
+    .pager { display:flex; justify-content:space-between; align-items:center; margin:16px 0; }
+    #notice { margin:10px 0; font-size:calc(12rem / 14); overflow-wrap:anywhere; white-space:pre-wrap; }
+    #notice[data-error="true"] { color:var(--memory-danger); }
+    .setting { padding:16px 0; border-bottom:1px solid var(--memory-line); }
+    .setting label { display:flex; justify-content:space-between; gap:16px; align-items:center; }
+    .setting p { color:var(--memory-muted); font-size:calc(12rem / 14); }
+    .setting input[type="number"] { width:94px; }
+    .warning { color:var(--memory-danger); font-size:calc(12rem / 14); padding:12px; border:1px solid var(--memory-line); border-radius:var(--memory-radius); margin:16px 0; }
+    dialog { background:var(--memory-surface); color:var(--memory-fg); border:1px solid var(--memory-line); border-radius:var(--memory-radius); width:calc(100% - 24px); max-width:560px; padding:20px; max-height:90vh; overflow:auto; }
+    dialog::backdrop { background:#0007; }
+    dialog textarea { display:block; width:100%; min-height:200px; resize:vertical; margin-top:8px; }
+    dialog .field { margin:12px 0; }
+    dialog .field label { display:block; font-size:calc(12rem / 14); color:var(--memory-muted); margin-bottom:5px; }
+    dialog .footer { margin-top:18px; justify-content:flex-end; }
+    [hidden] { display:none; }
+    @media (max-width:600px) { body { padding:18px 16px 28px; } #tabs button { padding:5px 9px; } }
+  </style>
+</head>
+<body>
+  <header class="heading">
+    <div class="row between"><h1>记忆</h1><span class="badge" id="state-badge">正在连接</span></div>
+    <p class="muted">留下值得记住的，让下一次对话接得上。</p>
+    <p class="muted project" id="project"></p>
+  </header>
+  <div class="row between"><span id="counts" class="muted"></span><button id="refresh" class="small" type="button">刷新</button></div>
+  <div role="tablist" aria-label="记忆分类" id="tabs">
+    <button type="button" role="tab" data-tab="memory" aria-selected="true">长期记忆</button>
+    <button type="button" role="tab" data-tab="daily" aria-selected="false">每日日志</button>
+    <button type="button" role="tab" data-tab="todos" aria-selected="false">待办</button>
+    <button type="button" role="tab" data-tab="trash" aria-selected="false">最近删除</button>
+    <button type="button" role="tab" data-tab="settings" aria-selected="false">设置</button>
+  </div>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <section id="browser">
+    <input id="search" type="search" placeholder="搜索全部记忆、日志和待办…" maxlength="200" aria-label="关键词搜索" />
+    <div class="row between filters">
+      <div class="row">
+        <select id="kind" aria-label="记忆类型"><option value="">全部类型</option><option value="preference">偏好</option><option value="fact">事实</option><option value="decision">决定</option><option value="lesson">经验</option><option value="project">项目约定</option><option value="feedback">反馈</option></select>
+        <select id="scope" aria-label="记忆范围"><option value="">全部范围</option><option value="project">当前项目</option><option value="global">全局</option></select>
+        <input id="date" type="date" aria-label="日志日期" hidden />
+        <select id="todo-filter" aria-label="待办状态" hidden><option value="all">全部状态</option><option value="open">未完成</option><option value="done">已完成</option></select>
+      </div>
+      <button id="add" class="primary small" type="button">＋ 记一条</button>
+    </div>
+    <div class="row" id="todo-actions" hidden><button id="clear-done" class="small" type="button">移除已完成（可恢复）</button></div>
+    <p id="search-hint" class="muted" hidden>关键词检索 · 支持中文、#标签、[[链接]] · 不是语义搜索</p>
+    <div id="items" aria-live="polite"></div>
+    <div class="pager" id="pager"><button id="prev" type="button">上一页</button><span id="page" class="muted"></span><button id="next" type="button">下一页</button></div>
+  </section>
+  <section id="settings-panel" hidden>
+    <form id="settings-form">
+      <div class="setting"><label for="enabled">启用记忆<input id="enabled" type="checkbox" /></label><p>暂停后不再向模型注入记忆，也不接受模型写入；设置和已有数据保留。</p></div>
+      <div class="setting"><label for="autoLearn">自动学习<input id="autoLearn" type="checkbox" /></label><p>默认关闭。每轮完成后提取最多 3 条长期记忆，默认留在当前项目。不记录原始对话。</p></div>
+      <div class="setting"><label for="summarizeOnEnd">自动会话总结<input id="summarizeOnEnd" type="checkbox" /></label><p>默认开启。从第 2 轮开始更新当日会话总结检查点，退出前已落盘，不依赖退出时模型仍在线。</p></div>
+      <div class="setting"><label for="mode">上下文快照<select id="mode"><option value="stable">稳定快照（推荐）</option><option value="per-turn">逐轮检索</option></select></label><p>稳定快照在数据/设置变化、压缩、跨天或新会话时刷新；逐轮模式额外挑选与当前问题相关的 3 条记忆。</p></div>
+      <div class="setting"><label for="includeDaily">注入今日 / 昨日日志<input id="includeDaily" type="checkbox" /></label></div>
+      <div class="setting"><label for="includeTodos">注入未完成待办<input id="includeTodos" type="checkbox" /></label></div>
+      <div class="setting"><label for="maxMemories">长期记忆条数<input id="maxMemories" type="number" min="1" max="100" required /></label></div>
+      <div class="setting"><label for="maxChars">上下文总字符预算<input id="maxChars" type="number" min="2000" max="16000" step="100" required /></label><p>优先级：待办 → 今日日志 → 置顶 / 长期记忆 → 相关记忆 → 昨日日志。</p></div>
+      <div class="warning">自动学习和总结会把已隐去疑似凭证的最近 12 轮文本（每条最多 1200 字符）发送给所选模型，可能产生费用。凭证检测不是绝对保证，请不要在对话中发送秘密。</div>
+      <p class="muted" id="model-info"></p><p class="muted">模型选择：扩展 → 记忆 → 配置 → 自动学习与总结模型（宿主模型选择器）。</p>
+      <div class="row"><button class="primary" type="submit">保存设置</button><button id="analyze" type="button">立即提取本会话</button></div>
+    </form>
+    <div class="setting"><h2>导出与恢复</h2><p>仅包含全局与当前项目的数据。卸载会删除插件私有数据，请先备份。</p><div class="row"><button id="copy" type="button">复制为 Markdown</button><button id="backup" type="button">生成 JSON 备份产物</button></div></div>
+    <div class="setting"><h2>数据安全</h2><p>新增、编辑和模型提取都会拒绝疑似凭证；磁盘中的敏感条目也不会注入。所有删除先进入回收站。回收站满 100 批时清理已恢复的历史；未恢复记录绝不自动淘汰，仍满时拒绝继续删除。</p><button id="clear" class="danger" type="button">清空当前可见数据…</button></div>
+  </section>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="editor-form"><h2 id="editor-title">新增记忆</h2>
+      <div class="field"><label for="edit-kind">类型</label><select id="edit-kind"></select></div>
+      <div class="field"><label for="edit-scope">范围（编辑已有记录不会改变归属）</label><select id="edit-scope"><option value="project">当前项目</option><option value="global">全局</option></select></div>
+      <div class="row" id="pin-field"><label for="edit-pinned">置顶</label><input id="edit-pinned" type="checkbox" /></div>
+      <div class="field"><label for="edit-content">内容（不要保存密码、密钥、令牌）</label><textarea id="edit-content" maxlength="2000" required></textarea><span id="char-count" class="muted">0 / 2000</span></div>
+      <p id="editor-error" role="alert" class="danger"></p>
+      <div class="row footer"><button type="button" id="cancel-edit">取消</button><button type="submit" class="primary" id="save-edit">保存</button></div>
+    </form>
+  </dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><h2 id="confirm-title">确认操作</h2><p id="confirm-text"></p><div class="row footer"><button id="confirm-no" type="button">取消</button><button id="confirm-yes" class="danger" type="button">确认</button></div></dialog>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const labels = { preference:'偏好', fact:'事实', decision:'决定', lesson:'经验', project:'项目约定', feedback:'反馈', note:'记录', summary:'会话总结', handoff:'压缩交接' };
+    let tab = 'memory', offset = 0, nextOffset = null, status = null, sequence = 0, edit = null, busy = false, debounce;
+    let lastStatusAt = 0, lastLoadedAt = 0, dirty = false;
+    const history = [];
+    const call = (name, args = {}) => window.enso.call(name, args);
+    const today = new Date();
+    $('date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    function notice(text, error = false) { $('notice').textContent = text; $('notice').dataset.error = String(error); }
+    function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
+    function button(text, handler, className = 'small') { const node = element('button', text, className); node.type = 'button'; node.onclick = handler; return node; }
+    async function action(work, message = '已保存') {
+      if (busy) return;
+      busy = true; document.body.setAttribute('aria-busy', 'true');
+      try { const result = await work(); lastStatusAt = 0; notice(typeof message === 'function' ? message(result) : message); await load(); return result; }
+      catch (error) { notice(error.message ?? String(error), true); }
+      finally { busy = false; document.body.removeAttribute('aria-busy'); }
+    }
+    function confirmAction(text, work) {
+      $('confirm-text').textContent = text; $('confirm-dialog').showModal();
+      $('confirm-yes').onclick = () => { $('confirm-dialog').close(); action(work, '操作完成，可在最近删除中恢复'); };
+    }
+    $('confirm-no').onclick = () => $('confirm-dialog').close();
+    function openEditor(target, record = null) {
+      edit = { target, record }; $('editor-error').textContent = '';
+      $('editor-title').textContent = `${record ? '编辑' : '新增'}${target === 'daily' ? '日志' : target === 'todos' ? '待办' : '记忆'}`;
+      const kinds = target === 'daily' ? ['note','summary','handoff'] : ['preference','fact','decision','lesson','project','feedback'];
+      $('edit-kind').replaceChildren(...kinds.map((key) => { const node = element('option', labels[key]); node.value = key; return node; }));
+      $('edit-kind').value = record?.kind ?? (target === 'daily' ? 'note' : 'fact');
+      $('edit-kind').parentElement.hidden = target === 'todos';
+      $('edit-scope').value = record?.scope ?? (status?.project ? 'project' : 'global');
+      $('edit-scope').disabled = !!record;
+      $('edit-scope').querySelector('[value="project"]').disabled = !status?.project;
+      $('pin-field').hidden = target !== 'memory'; $('edit-pinned').checked = record?.pinned ?? false;
+      $('edit-content').value = record?.content ?? record?.text ?? '';
+      $('char-count').textContent = `${$('edit-content').value.length} / 2000`;
+      $('editor').showModal(); $('edit-content').focus();
+    }
+    $('edit-content').oninput = () => { $('char-count').textContent = `${$('edit-content').value.length} / 2000`; };
+    $('cancel-edit').onclick = () => $('editor').close();
+    $('editor-form').onsubmit = async (event) => {
+      event.preventDefault(); if ($('save-edit').disabled) return; $('save-edit').disabled = true;
+      const args = { content: $('edit-content').value, scope: $('edit-scope').value };
+      if (edit.record) args.id = edit.record.id;
+      try {
+        if (edit.target === 'todos') await call('scratchpad', { action: edit.record ? 'edit' : 'add', text: args.content, scope: args.scope, ...(args.id ? { id:args.id } : {}) });
+        else await call('save', { ...args, target: edit.target === 'daily' ? 'daily' : 'long_term', kind:$('edit-kind').value, ...(edit.target === 'memory' ? { pinned:$('edit-pinned').checked } : {}) });
+        $('editor').close(); notice('已保存'); lastStatusAt = 0; offset = 0; history.length = 0; await load();
+      } catch (error) { $('editor-error').textContent = error.message; }
+      finally { $('save-edit').disabled = false; }
+    };
+    function renderItem(row, source) {
+      const item = element('article', undefined, `item${row.done ? ' done' : ''}`);
+      const meta = element('div', undefined, 'meta');
+      meta.append(element('span', row.pinned ? '◆ 置顶' : source === 'daily' ? row.date : source === 'todos' ? (row.done ? '已完成' : '待完成') : labels[row.kind] ?? '记忆', 'badge'));
+      meta.append(element('span', row.scope === 'global' ? '全局' : '当前项目'));
+      meta.append(element('span', new Date(row.updatedAt).toLocaleString()));
+      if (row.source === 'auto') meta.append(element('span', '自动整理'));
+      const body = element('p', row.content ?? row.text, 'body');
+      const actions = element('div', undefined, 'row');
+      actions.append(button('编辑', () => openEditor(source, row)));
+      if (source === 'memory') actions.append(button(row.pinned ? '取消置顶' : '置顶', () => action(() => call('save', { id:row.id, content:row.content ?? row.text, pinned:!row.pinned }))));
+      if (source === 'todos') actions.append(button(row.done ? '标为未完成' : '完成', () => action(() => call('scratchpad', { action:row.done ? 'undo' : 'done', id:row.id }))));
+      actions.append(button('删除', () => confirmAction('此条将移到最近删除，可恢复。确定删除？', () => call('forget', { ids:[row.id], target:source === 'daily' ? 'daily' : source === 'todos' ? 'scratchpad' : 'long_term' })), 'small danger'));
+      item.append(meta, body, actions); return item;
+    }
+    function renderTrash(row) {
+      const item = element('article', undefined, 'item');
+      item.append(element('p', `${row.count} 条 · ${new Date(row.deletedAt).toLocaleString()}`, 'meta'), element('p', row.preview, 'body'));
+      if (row.restoredAt) item.append(element('span', '已恢复', 'badge'));
+      else item.append(button('恢复这一批', () => action(() => call('restore', { recoveryId:row.id }), '已恢复')));
+      return item;
+    }
+    function showSettings() {
+      for (const [key,value] of Object.entries(status.settings)) { const input = $(key); if (!input) continue; if (input.type === 'checkbox') input.checked = value; else input.value = value; }
+      $('model-info').textContent = `当前整理模型：${status.model ?? '跟随会话'}`;
+    }
+    async function load() {
+      const request = ++sequence;
+      try {
+        const latest = status && Date.now()-lastStatusAt < 1000 ? status : await call('status');
+        if (request !== sequence) return; status = latest; lastStatusAt = Date.now(); dirty = false;
+        $('state-badge').textContent = status.enabled ? '本地记忆 · 已启用' : '记忆已暂停';
+        $('project').textContent = status.project ? `全局 ＋ ${status.project}` : '当前无项目，仅显示全局记忆';
+        $('counts').textContent = `${status.memories} 条记忆 · ${status.todos} 项待办 · ${status.recoverable} 批可恢复`;
+        const settings = tab === 'settings'; $('settings-panel').hidden = !settings; $('browser').hidden = settings;
+        if (settings) { showSettings(); return; }
+        const query = $('search').value.trim(), searching = !!query;
+        $('kind').hidden = tab !== 'memory' || searching; $('scope').hidden = !['memory','todos'].includes(tab) || searching;
+        $('date').hidden = tab !== 'daily' || searching; $('todo-filter').hidden = tab !== 'todos' || searching;
+        $('search').hidden = tab === 'trash'; $('add').hidden = tab === 'trash' || searching;
+        $('add').disabled = !status.enabled;
+        $('todo-actions').hidden = tab !== 'todos' || searching; $('search-hint').hidden = !searching;
+        $('add').textContent = tab === 'todos' ? '＋ 加待办' : tab === 'daily' ? '＋ 写日志' : '＋ 记一条';
+        let result;
+        if (tab === 'trash') result = await call('trash', { offset,limit:6 });
+        else if (!status.enabled) result = { items:[],count:0,nextOffset:null };
+        else if (searching) result = await call('search', { query,offset,limit:6 });
+        else result = await call('read', { target:tab === 'daily' ? 'daily' : tab === 'todos' ? 'scratchpad' : 'long_term',offset,limit:6,
+          ...(tab === 'daily' ? { date:$('date').value } : {}), ...(tab === 'memory' && $('kind').value ? { kind:$('kind').value } : {}),
+          ...(tab === 'todos' && $('todo-filter').value !== 'all' ? { done:$('todo-filter').value === 'done' } : {}),
+          ...(['memory','todos'].includes(tab) && $('scope').value ? { scope:$('scope').value } : {}) });
+        if (request !== sequence) return;
+        nextOffset = result.nextOffset;
+        const rows = result.items ?? result.results;
+        const filtered = tab === 'todos' && !searching ? rows.filter((row) => $('todo-filter').value === 'all' || row.done === ($('todo-filter').value === 'done')) : rows;
+        $('items').replaceChildren(...filtered.map((row) => tab === 'trash' ? renderTrash(row) : renderItem(row, searching ? ({ memory:'memory',daily:'daily',scratchpad:'todos' }[row.source]) : tab)));
+        if (!filtered.length) {
+          const empty = element('div', undefined, 'empty');
+          empty.append(element('strong', !status.enabled && tab !== 'trash' ? '记忆已暂停' : searching ? '没有找到匹配内容' : tab === 'trash' ? '还没有删除记录' : '这里还很安静'));
+          empty.append(element('p', !status.enabled ? '到设置中启用后继续。' : searching ? '试试更短的关键词，或 #标签。' : tab === 'trash' ? '删除的内容会先保存在这里。' : '手动添加，或在对话里说“请记住……”。')); $('items').append(empty);
+        }
+        $('page').textContent = `共 ${result.count} 条 · ${offset + (rows.length ? 1 : 0)}–${offset+rows.length}`;
+        $('prev').disabled = !history.length; $('next').disabled = nextOffset === null;
+        lastLoadedAt = Date.now();
+      } catch (error) { if (request === sequence) { notice(error.message ?? String(error), true); $('state-badge').textContent = '读取失败'; } }
+    }
+    const reset = () => { offset = 0; history.length = 0; load(); };
+    $('tabs').onclick = (event) => { const node = event.target.closest('[data-tab]'); if (!node) return; tab = node.dataset.tab; for (const button of $('tabs').children) button.setAttribute('aria-selected', String(button === node)); $('search').value = ''; reset(); };
+    $('tabs').onkeydown = (event) => {
+      const buttons = [...$('tabs').children], index = buttons.indexOf(event.target);
+      const destination = event.key === 'ArrowRight' ? (index+1)%buttons.length : event.key === 'ArrowLeft' ? (index+buttons.length-1)%buttons.length : event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length-1 : -1;
+      if (destination < 0) return; event.preventDefault(); buttons[destination].focus(); buttons[destination].click();
+    };
+    $('search').oninput = () => { clearTimeout(debounce); debounce = setTimeout(reset, 220); };
+    for (const id of ['kind','scope','date','todo-filter']) $(id).onchange = reset;
+    $('refresh').onclick = () => { notice(''); lastStatusAt = 0; load(); };
+    $('add').onclick = () => openEditor(tab);
+    $('prev').onclick = () => { offset = history.pop() ?? 0; load(); };
+    $('next').onclick = () => { if (nextOffset === null) return; history.push(offset); offset = nextOffset; load(); };
+    $('clear-done').onclick = () => confirmAction('把当前项目和全局的已完成待办移到最近删除？', () => call('scratchpad', { action:'clear_done' }));
+    $('settings-form').onsubmit = (event) => {
+      event.preventDefault(); const values = {};
+      for (const key of Object.keys(status.settings)) { const input = $(key); values[key] = input.type === 'checkbox' ? input.checked : input.type === 'number' ? Number(input.value) : input.value; }
+      action(() => call('settings', values), '设置已保存，下轮生效');
+    };
+    $('analyze').onclick = () => action(() => call('analyze'), (result) => result.error ? `提取失败：${result.error}` : result.skipped ? result.reason ?? '尚无已完成的本会话对话可提取，或结果已过期' : `提取完成：新增 ${result.learned} 条记忆${result.summarized ? '，已更新会话总结' : ''}`);
+    $('copy').onclick = () => action(() => call('copy_markdown'), '已复制全局和当前项目的 Markdown');
+    $('backup').onclick = () => action(() => call('export_backup'), (result) => `备份产物已生成：${result.name}（${result.id}）。可在会话产物中查看。`);
+    $('clear').onclick = () => confirmAction('将清空【当前项目＋全局】的全部记忆、日志和待办，不影响其他项目。内容进入最近删除。请确认已备份。', () => call('clear', { confirm:'CLEAR' }));
+    const applyTheme = (theme) => { document.documentElement.dataset.theme = theme; };
+    applyTheme(window.enso.theme); window.enso.onTheme(applyTheme);
+    const visible = () => document.visibilityState !== 'hidden' && document.body.getBoundingClientRect().width > 0;
+    const refreshDirty = () => { if (dirty && visible() && tab !== 'settings' && !busy) { lastStatusAt = 0; load(); } };
+    window.enso.on('memory-changed', () => {
+      dirty = true;
+      if (!visible() || busy || tab === 'settings') return;
+      clearTimeout(debounce); debounce = setTimeout(() => { if (Date.now()-lastLoadedAt > 250) refreshDirty(); }, 150);
+    });
+    window.addEventListener('resize', refreshDirty);
+    window.addEventListener('focus', refreshDirty);
+    document.addEventListener('visibilitychange', refreshDirty);
+    dirty = true;
+    requestAnimationFrame(refreshDirty);
+  </script>
+</body>
+</html>

@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDesignRegistry } from '@/features/design/host/registry';
 import { GALLERY_VIEW_ID } from '@/features/design/vetta/src/tab-ids';
 import { useImageStudioStore } from '@/features/imageStudio/store';
+import { setPluginViews } from '@/plugins/viewBridge';
+import { closePluginWorkspace, getPluginWorkspace } from '@/plugins/workspaceViews';
 import { useRemoteNodesStore } from '@/stores/remoteNodes';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
@@ -154,6 +156,11 @@ vi.mock('@/features/design/mounts/DesignGallery', () => ({
 vi.mock('@/plugins/PluginNotices', () => ({ PluginNotices: () => null }));
 vi.mock('@/plugins/PluginThemeHost', () => ({ PluginThemeHost: () => null }));
 vi.mock('@/plugins/PluginUiHost', () => ({ PluginUiHost: () => null }));
+vi.mock('@/plugins/PluginView', () => ({
+  PluginView: ({ sessionId }: { sessionId: string | null }) => (
+    <div data-slot="plugin-frame" data-session={sessionId ?? 'global'} />
+  ),
+}));
 vi.mock('@/components/ui/toast', () => ({ ToastProvider: () => null, addToast: vi.fn() }));
 vi.mock('@/components/ui/alert-dialog', () => {
   const Pass = () => null;
@@ -205,6 +212,8 @@ beforeEach(() => {
   useSidebarStore.setState({ collapsed: false, auto: false });
   useRemoteNodesStore.setState({ activeNodeId: 'local' });
   useSessionsStore.setState({ activeId: null });
+  setPluginViews([]);
+  closePluginWorkspace();
   useSettingsStore.setState({ designEnabled: true });
   useImageStudioStore.setState({ open: false, historyOpen: false });
   useDesignRegistry.setState({ contributions: [], ui: {}, canvasSessionId: null });
@@ -216,6 +225,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(() => root.unmount());
   container.remove();
+  setPluginViews([]);
+  closePluginWorkspace();
   useDesignRegistry.setState({ contributions: [], ui: {}, canvasSessionId: null });
   useImageStudioStore.setState({ open: false, historyOpen: false });
   vi.restoreAllMocks();
@@ -231,6 +242,38 @@ it('keeps the design and image workspaces without a built-in Wiki entry', async 
   expect(railEntry('images')).not.toBeNull();
   expect(railEntry('design')).not.toBeNull();
   expect(railEntry('wiki')).toBeNull();
+});
+
+it('插件记忆从最左侧打开独立工作区，不创建聊天或右侧标签，停用即撤销', async () => {
+  setPluginViews([
+    {
+      pluginId: 'codekiln.memory',
+      pluginName: 'Memory',
+      id: 'memory',
+      title: 'Memory',
+      entry: 'memory.html',
+      location: 'activitybar',
+    },
+  ]);
+  await mountApp();
+  const memory = railEntry('plugin:codekiln.memory:memory');
+  expect(memory).not.toBeNull();
+  await click(memory);
+  expect(memory?.getAttribute('aria-pressed')).toBe('true');
+  expect(railEntry('code')?.getAttribute('aria-pressed')).toBe('false');
+  expect(present('plugin-workspace')).not.toBeNull();
+  expect(present('plugin-frame')?.getAttribute('data-session')).toBe('global');
+  expect(present('project-sidebar')).toBeNull();
+  expect(present('chat-view')?.parentElement?.classList.contains('hidden')).toBe(true);
+  expect(useSessionsStore.getState().activeId).toBeNull();
+  await click(railEntry('code'));
+  expect(present('plugin-workspace')).toBeNull();
+  expect(present('chat-view')?.parentElement?.classList.contains('hidden')).toBe(false);
+  await click(memory);
+  act(() => setPluginViews([]));
+  expect(present('plugin-workspace')).toBeNull();
+  expect(railEntry('plugin:codekiln.memory:memory')).toBeNull();
+  expect(getPluginWorkspace()).toBeNull();
 });
 
 it('冷启动待处理插件深链在 StrictMode 重订阅后不丢失', async () => {

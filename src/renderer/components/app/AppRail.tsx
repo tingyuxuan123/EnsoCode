@@ -3,6 +3,7 @@ import { PanelLeft, Search } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { effectiveKeybindings, formatBinding } from '@/lib/keybindings';
 import { cn } from '@/lib/utils';
+import { PluginIcon } from '@/plugins/PluginIcon';
 import { useSettingsStore } from '@/stores/settings';
 import {
   AskCodeKilnIcon,
@@ -26,6 +27,14 @@ interface AppRailProps {
   /** 仅本机 Code 且设计功能开启时提供；不由图标轨推导路由。 */
   designGallery?: { label: string; active: boolean; onToggle(): void };
   imageStudio?: { active: boolean; onToggle(): void };
+  pluginViews?: {
+    pluginId: string;
+    id: string;
+    title: string;
+    icon?: string;
+    active: boolean;
+    onToggle(): void;
+  }[];
 }
 
 const RAIL_BUTTON =
@@ -43,6 +52,7 @@ export function AppRail({
   codeWorkspace,
   designGallery,
   imageStudio,
+  pluginViews,
 }: AppRailProps) {
   const { t } = useI18n();
   const keybindings = useSettingsStore((s) => s.keybindings);
@@ -131,6 +141,24 @@ export function AppRail({
           </button>
         </RailTip>
       )}
+      {pluginViews?.map((view) => (
+        <RailTip key={`${view.pluginId}:${view.id}`} label={view.title}>
+          <button
+            type="button"
+            onClick={view.onToggle}
+            className={cn(RAIL_BUTTON, view.active && RAIL_SELECTED)}
+            aria-label={view.title}
+            aria-pressed={view.active}
+            data-rail-view={`plugin:${view.pluginId}:${view.id}`}
+          >
+            <PluginIcon
+              pluginId={view.pluginId}
+              icon={view.icon}
+              className="size-[19px] object-contain"
+            />
+          </button>
+        </RailTip>
+      ))}
       <div className="flex-1" />
       <UpdateRailItem />
       <StatusBar />

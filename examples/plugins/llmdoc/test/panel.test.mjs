@@ -377,3 +377,35 @@ test('maintenance prepares only update/prune drafts and surfaces refusal to over
   ]);
   assert.match(byId('workflow-result').textContent, /草稿.*不是已执行|草稿.*尚未执行/);
 });
+
+test('empty searches show coverage guidance, and sampled reports are never displayed as complete', async (t) => {
+  const truncatedFields = [{ path: 'unmapped.dirty', totalItems: 4000, returnedItems: 30 }];
+  const { byId, click } = await open(t, {
+    search: () => ({
+      ...emptyPage,
+      indexedDocuments: 2,
+      hint: '仅检索知识地图中的 2 篇文档，不代表源码中没有此功能。',
+    }),
+    status: () => ({ ...response('status', { documents: { total: 2 } }), truncatedFields }),
+    delta: () => ({
+      ...response('delta', { impacted: [], needsReview: [], unmapped: { dirty: ['src/a.ts'] } }),
+      truncatedFields,
+    }),
+    validate: () => ({
+      ...response('validate', { ok: false, errors: ['error'] }, 1),
+      truncatedFields: [{ path: 'errors', totalItems: 3000, returnedItems: 30 }],
+    }),
+  });
+  assert.match(byId('overview').textContent, /部分明细/);
+  assert.match(byId('overview').textContent, /4000/);
+  byId('query').value = '插件 主题 样式变量';
+  await click('search');
+  assert.match(byId('status').textContent, /2 篇文档/);
+  assert.match(byId('status').textContent, /源码/);
+  await click('delta');
+  assert.match(byId('review').textContent, /部分明细/);
+  assert.match(byId('review').textContent, /4000/);
+  await click('validate');
+  assert.match(byId('status').textContent, /部分明细/);
+  assert.match(byId('status').textContent, /3000/);
+});

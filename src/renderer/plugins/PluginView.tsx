@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/i18n';
 import { inlinePluginViewHtml } from './inlineAssets';
+import { observePluginTheme, readPluginTheme } from './themeBridge';
 import { hasActivePluginGesture, hasPluginViewGesture } from './userGesture';
 import {
   createViewBridge,
@@ -73,12 +74,9 @@ export function PluginFrame({
     const nonce = crypto.randomUUID();
     const channel = new MessageChannel();
     channelRef.current = channel;
-    const pushTheme = () =>
-      channel.port1.postMessage(
-        viewThemePush(document.documentElement.classList.contains('dark') ? 'dark' : 'light')
-      );
-    const observer = new MutationObserver(pushTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    const stopTheme = observePluginTheme(document, (snapshot) =>
+      channel.port1.postMessage(viewThemePush(snapshot.theme, snapshot.variables))
+    );
     const unsubscribe = window.electronAPI.extensionPlugins.onViewEvent?.((event) => {
       if (!disposed && event.pluginId === pluginId)
         channel.port1.postMessage(viewEventPush(event.name, event.data));
@@ -135,6 +133,7 @@ export function PluginFrame({
           }
         );
         if (disposed) return;
+        const appearance = readPluginTheme(document);
         frame.contentWindow?.postMessage(
           {
             type: 'enso-view-init',
@@ -144,7 +143,8 @@ export function PluginFrame({
             ...(fileRef.current
               ? { file: { rel: fileRef.current.rel, text: fileRef.current.text } }
               : {}),
-            theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+            theme: appearance.theme,
+            themeVariables: appearance.variables,
           },
           '*',
           [channel.port2]
@@ -159,7 +159,7 @@ export function PluginFrame({
     frame.src = url.href;
     return () => {
       disposed = true;
-      observer.disconnect();
+      stopTheme();
       unsubscribe?.();
       channelRef.current = null;
       frame.removeEventListener('load', onLoad);

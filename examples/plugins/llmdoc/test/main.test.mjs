@@ -35,8 +35,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+export async function runCli(args) {
 const id = 'llmdoc/architecture/知识.mdx';
-const args = process.argv.slice(2);
 const command = args.find((arg) => ['tree', 'search', 'show', 'context', 'status', 'delta', 'validate', 'prune', 'upgrade'].includes(arg));
 assert.ok(process.permission);
 assert.equal(process.env.LLMDOC_TEST_SECRET, undefined);
@@ -66,16 +66,17 @@ if (command === 'tree') {
   assert.throws(() => spawnSync('do-not-launch'), { code: 'ERR_ACCESS_DENIED' });
   if (query === 'timeout') await new Promise((resolve) => setTimeout(resolve, 30000));
   if (query === 'invalid json') { console.log('not json'); process.exit(0); }
-  if (query === 'huge page' && Number(args[args.indexOf('--limit') + 1]) > 1)
-    process.stdout.write('a'.repeat(200000));
-  if (query === 'overflow') process.stdout.write('a'.repeat(200000));
+  if (query === 'huge page') entry.description = '知识'.repeat(50000);
+  if (query === 'overflow') process.stdout.write('a'.repeat(9 * 1024 * 1024));
   if (query === 'failure') { console.log('The document was unavailable'); process.exit(2); }
   if (query === 'bad output id') entry.path = 'llmdoc/../../secret.mdx';
-  result = { query, results: [{ ...entry, snippet: query }], pagination };
+  result = { query, results: query === 'no matches' ? [] : [{ ...entry, snippet: query }],
+    pagination: query === 'no matches' ? { totalItems: 0, returnedItems: 0, nextCursor: null } : pagination };
 } else if (command === 'show') {
   assert.deepEqual(args, ['--json', '--limit', '1', '--budget', '2000', 'show', id]);
-  const body = readFileSync(id, 'utf8').includes('long preview fixture')
-    ? 'x'.repeat(13000) : '# Example\n<script>plain text</script>';
+  const source = readFileSync(id, 'utf8');
+  const body = source.includes('large UTF8 preview fixture') ? '中文知识'.repeat(50000)
+    : source.includes('long preview fixture') ? 'x'.repeat(13000) : '# Example\n<script>plain text</script>';
   result = { documents: [{ ...entry, body }], pagination: { totalItems: 1, returnedItems: 1, nextCursor: null } };
 } else if (command === 'context') {
   assert.deepEqual(args, ['--json', '--limit', '30', '--budget', '1400', ...(args.includes(cursor) ? ['--cursor', cursor] : []), 'context', '--files', 'src/future file.ts', 'already-deleted.ts']);
@@ -105,17 +106,26 @@ if (command === 'tree') {
   }
   result = command === 'status' ? { baseline: null, head, commitsBehindHead: null, relevantCommitsBehindHead: null, degradedReason: null, documents: summaries, unmapped, growth: {} }
     : { suggestedMode: 'light', reasons: [], degradedReason: null, impacted: [], needsReview: [id], unmapped, pagination };
+  if (existsSync('fixture-large-report')) unmapped.dirty = Array.from({ length: 4000 }, (_, i) => 'src/未映射的源码目录/文件-' + i + '.ts');
+  if (command === 'delta' && existsSync('fixture-paged-report')) {
+    const limit = Number(args[args.indexOf('--limit') + 1]);
+    result.impacted = Array.from({ length: limit }, () => ({ ...entry, description: '知识'.repeat(5000), changedCommittedPaths: [], dirtyPaths: [] }));
+    result.needsReview = [];
+    result.pagination = { totalItems: 30, returnedItems: limit, nextCursor: cursor };
+  }
   if (command === 'delta') assert.deepEqual(args.slice(-3), ['--cursor', cursor, 'delta']);
 } else if (command === 'validate') {
   assert.equal(safeGit('rev-parse', '--is-shallow-repository').stdout.trim(), 'false');
   result = { ok: false, errors: [{ code: 'fixture.invalid', severity: 'error', message: 'Fixture validation error' }], warnings: [] };
+  if (existsSync('fixture-large-report')) result.errors = Array.from({ length: 3000 }, (_, i) => ({ code: 'fixture.invalid', severity: 'error', message: '第' + i + '项校验错误' }));
   process.exitCode = 1;
 } else if (command === 'upgrade') {
   assert.equal(existsSync('llmdoc/docs/nested/old.md'), true);
   assert.throws(() => writeFileSync('llmdoc/docs/nested/old.md', 'changed'), { code: 'ERR_ACCESS_DENIED' });
   result = { status: 'dry_run', summary: 'Legacy inventory', legacyPaths: ['docs/nested/old.md'], targetStructure: [], notes: [], requiresRecorderSemanticMigration: true };
 } else throw new Error('Unexpected CLI command');
-console.log(JSON.stringify(result));
+return { stdout: JSON.stringify(result), exitCode: process.exitCode ?? 0 };
+}
 `;
 
 async function fixture(t) {
@@ -138,7 +148,16 @@ async function fixture(t) {
       bin: { llmdoc: './dist/bin/llmdoc.js' },
     })
   );
-  await writeFile(cliEntry, fakeCli);
+  await writeFile(join(packageRoot, 'dist', 'cli.js'), fakeCli);
+  // Match the pinned upstream bin: process.exit can cut pipe output off before JSON finishes.
+  await writeFile(
+    cliEntry,
+    `import { runCli } from '../cli.js';
+const result = await runCli(process.argv.slice(2));
+process.stdout.write(result.stdout + '\\n');
+process.exit(result.exitCode);
+`
+  );
   const config = { cliEntry, nodeExecutable: process.execPath };
   const context = { projectRoot, sessionId: 'fixture', signal: new AbortController().signal };
   const tools = new Map();
@@ -328,13 +347,31 @@ test('reports CLI failures, invalid protocol and overflowing stdout without retu
   await assert.rejects(search({ query: 'overflow' }, context), /输出超过/);
 });
 
-test('a list query over the byte budget narrows itself instead of returning no page', async (t) => {
+test('large CLI rows are projected before applying the response byte budget', async (t) => {
   const { methods, context } = await fixture(t);
   const result = await methods.get('search')({ query: 'huge page' }, context);
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].id, id);
-  assert.equal(result.narrowed, true);
-  assert.equal(result.limit, 1);
+  assert.equal(result.entries[0].description, '知识'.repeat(160));
+  assert.ok(Buffer.byteLength(JSON.stringify(result)) < 48 * 1024);
+});
+
+test('an empty search explains the actual knowledge coverage, not missing source code', async (t) => {
+  const { methods, context } = await fixture(t);
+  const result = await methods.get('search')({ query: 'no matches' }, context);
+  assert.deepEqual(result.entries, []);
+  assert.equal(result.indexedDocuments, 1);
+  assert.match(result.hint, /1 篇/);
+  assert.match(result.hint, /源码/);
+});
+
+test('a large Chinese document still opens as an explicitly shortened preview', async (t) => {
+  const { methods, context, projectRoot } = await fixture(t);
+  await writeFile(join(projectRoot, id), `${markdown}\nlarge UTF8 preview fixture\n`);
+  const result = await methods.get('show')({ id }, context);
+  assert.equal(result.body, '中文知识'.repeat(3000));
+  assert.equal(result.bodyTruncated, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(result)) < 48 * 1024);
 });
 
 test('times out a hung subprocess and handles invocation cancellation', async (t) => {
@@ -394,6 +431,52 @@ async function gitFixture(t, fx) {
   run('commit', '--no-gpg-sign', '-m', 'Fixture');
   return run;
 }
+
+test('large status and failed validation return bounded, explicitly sampled reports with exact counts', async (t) => {
+  const fx = await fixture(t);
+  if (!(await gitFixture(t, fx))) return;
+  const { context, methods, projectRoot, handlers, injections } = fx;
+  await writeFile(join(projectRoot, 'fixture-large-report'), 'fixture');
+  const index = await readFile(join(projectRoot, '.git', 'index'));
+  const status = await methods.get('status')({}, context);
+  assert.equal(status.result.documents.total, 1);
+  assert.equal(status.unmappedCounts.dirty, 4000);
+  assert.equal(status.unmappedCounts.committed, 0);
+  assert.ok(status.result.unmapped.dirty.length > 0);
+  assert.ok(status.result.unmapped.dirty.length < 4000);
+  assert.ok(
+    status.truncatedFields.some(
+      (field) => field.path === 'unmapped.dirty' && field.totalItems === 4000
+    )
+  );
+  assert.ok(Buffer.byteLength(JSON.stringify(status)) <= 48 * 1024);
+  const validation = await methods.get('validate')({}, context);
+  assert.equal(validation.exitCode, 1);
+  assert.equal(validation.result.ok, false);
+  assert.ok(validation.result.errors.length > 0);
+  assert.ok(
+    validation.truncatedFields.some((field) => field.path === 'errors' && field.totalItems === 3000)
+  );
+  assert.ok(Buffer.byteLength(JSON.stringify(validation)) <= 48 * 1024);
+  await handlers.get('agent_end')({}, context);
+  assert.match(injections[0].text, /4000 个源码路径未映射/);
+  assert.deepEqual(await readFile(join(projectRoot, '.git', 'index')), index);
+});
+
+test('oversized paginated diagnostic rows narrow in the CLI without locally dropping documents', async (t) => {
+  const fx = await fixture(t);
+  if (!(await gitFixture(t, fx))) return;
+  await writeFile(join(fx.projectRoot, 'fixture-paged-report'), 'fixture');
+  const report = await fx.methods.get('delta')({ cursor: firstCursor }, fx.context);
+  assert.equal(report.narrowed, true);
+  assert.equal(report.limit, 1);
+  assert.equal(report.result.impacted.length, 1);
+  assert.equal(report.result.pagination.returnedItems, 1);
+  assert.equal(report.result.pagination.totalItems, 30);
+  assert.equal(report.result.pagination.nextCursor, firstCursor);
+  assert.equal(report.truncatedFields, undefined);
+  assert.ok(Buffer.byteLength(JSON.stringify(report)) <= 48 * 1024);
+});
 
 test('context supports bounded missing paths and pagination without Git while rejecting flags, traversal and symlinks', async (t) => {
   const { context, methods, projectRoot, dir } = await fixture(t);

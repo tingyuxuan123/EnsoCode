@@ -40,6 +40,26 @@ describe('清单：新字段缺省与兼容', () => {
   });
 });
 
+describe('清单：插件页面位置', () => {
+  const view = { id: 'memory', title: 'Memory', entry: 'memory.html' };
+  const withView = (entry: object) =>
+    base({ permissions: ['agent.tool', 'ui.view'] }, { views: [entry] });
+  it('默认仍为侧栏，不向旧清单注入字段或改变身份指纹', () => {
+    expect(manifestOf(withView(view)).contributes.views).toEqual([view]);
+  });
+  it('保留显式的 activitybar 和 sidebar 位置', () => {
+    for (const location of ['activitybar', 'sidebar']) {
+      expect(manifestOf(withView({ ...view, location })).contributes.views[0]).toEqual({
+        ...view,
+        location,
+      });
+    }
+  });
+  it.each(['toolbar', '', null, 1, {}])('拒绝未知页面位置 %j', (location) => {
+    expect(errorsOf(withView({ ...view, location }))).not.toEqual([]);
+  });
+});
+
 describe('清单：动态贡献', () => {
   it('声明上限；动态工具需要 agent.tool', () => {
     expect(

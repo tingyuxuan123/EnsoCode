@@ -14,6 +14,15 @@
       const themeListeners = new Set();
       const fileListeners = new Set();
       const eventListeners = new Map();
+      // Keep in sync with plugins/themeBridge.ts; these are values, never CSS source or URLs.
+      const themeVariableNames = ['--background','--foreground','--panel','--shell','--card','--card-foreground','--popover','--popover-foreground','--primary','--primary-foreground','--secondary','--secondary-foreground','--muted','--muted-foreground','--accent','--accent-foreground','--border','--input','--ring','--brand','--destructive','--destructive-foreground','--success','--warning','--radius','--font-family-sans','--font-family-mono','--font-size-base'];
+      const applyThemeVariables = (variables) => {
+        for (const name of themeVariableNames) {
+          const value = variables && typeof variables === 'object' && Object.hasOwn(variables, name) ? variables[name] : null;
+          if (typeof value === 'string' && value.length <= 512 && !/[\\\p{Cc};{}<>]|url\s*\(|@import/iu.test(value)) document.documentElement.style.setProperty(name, value);
+          else document.documentElement.style.removeProperty(name);
+        }
+      };
       const emit = (listeners, value) => { for (const listener of listeners || []) { try { listener(value); } catch {} } };
       const subscribe = (listeners, listener) => { if (typeof listener !== 'function') return () => {}; listeners.add(listener); return () => listeners.delete(listener); };
       const storage = Object.freeze({
@@ -48,7 +57,7 @@
         if (data.file && typeof data.file.rel === 'string' && typeof data.file.text === 'string') file = { rel: data.file.rel, text: data.file.text };
         if (data.storage && typeof data.storage === 'object') for (const [key, value] of Object.entries(data.storage)) if (typeof value === 'string') store[key] = value;
         port.onmessage = ({ data: reply }) => {
-          if (reply?.type === 'enso-theme') { if (reply.theme !== 'dark' && reply.theme !== 'light') return; theme = reply.theme; document.documentElement.dataset.theme = theme; emit(themeListeners, theme); return; }
+          if (reply?.type === 'enso-theme') { if (reply.theme !== 'dark' && reply.theme !== 'light') return; theme = reply.theme; document.documentElement.dataset.theme = theme; applyThemeVariables(reply.variables); emit(themeListeners, theme); return; }
           if (reply?.type === 'enso-view-event') { emit(eventListeners.get(reply.name), reply.data); return; }
           if (reply?.type === 'enso-file') { if (!file || typeof reply.rel !== 'string' || typeof reply.text !== 'string' || (reply.rel === file.rel && reply.text === file.text)) return; file = { rel: reply.rel, text: reply.text }; emit(fileListeners, file); return; }
           const entry = reply && pending.get(reply.id);
@@ -59,6 +68,7 @@
         // Preserve this document's CSP instead of replacing the head with plugin HTML.
         const documentBody = new DOMParser().parseFromString(data.html, 'text/html');
         document.documentElement.dataset.theme = theme;
+        applyThemeVariables(data.themeVariables);
         for (const node of [...documentBody.head.childNodes, ...documentBody.body.childNodes]) {
           if (node.nodeType === Node.ELEMENT_NODE && ['META', 'BASE'].includes(node.tagName)) continue;
           if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SCRIPT') {

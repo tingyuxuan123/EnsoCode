@@ -8,6 +8,8 @@
 
 原内置 Wiki 记忆已移除，不会迁移或删除旧 Vault。本机 Git 项目可单独安装 [知识地图](../examples/plugins/llmdoc/README.md) 浏览、检索、复核工程知识。扩展自动检测已有的 Node、Git 和 CLI，缺少 CLI 时由用户点击安装到扩展的私有目录；并在有知识库的项目里，于每轮开始前追加一条只读查阅提醒。初始化和更新通过显式的 Agent 工作流进行，写入与提交需分别确认，不会自动编译聊天记录。
 
+需要偏好、事实、每日日志与待办，可另装 [记忆插件](../examples/plugins/memory/README.md)：独立私有存储、项目隔离、可恢复删除、每轮上下文与可选自动学习/总结，不会自动迁移或改写 Wiki、llmdoc、AGENTS.md 或用户画像。自动整理会调用配置的模型，费用与隐私说明见插件设置和 README。
+
 ## 适用范围：本仓库的原生插件 API
 
 本文描述的是 **CodeKiln 实际实现的原生插件 API，清单版本为 `schemaVersion: 1`**，不是 Open Vetta、VS Code 或 Claude Code 的插件 SDK。那些平台的插件不能只改文件名就按本文运行。兼容标识仍沿用 `enso.*`。
@@ -129,7 +131,7 @@ my-snippets/
 | `browser.domains` | `browser.control` 允许的精确 HTTPS 主机名；不匹配子域/通配；增加域名需重新批准 |
 | `mcp.tools` | 精确 `server/tool` 白名单，如 `["bce/enhance_prompt"]`；需 `mcp.call`；不接受裸工具名或通配符，同名工具在其他 server 上不会获授权 |
 | `contributes.agentTools` | `{name, description, parameters, timeoutMs?, readOnly?}`；需 `agent.tool`；schema 必须完整声明 `type: "object"`、properties 及各参数类型 |
-| `contributes.views` | `{id, title, entry}`；entry 为自包含 `.html`；需 `ui.view` |
+| `contributes.views` | `{id, title, entry, location?}`；entry 为自包含 `.html`；需 `ui.view`；缺省/`sidebar` 在右侧栏，`activitybar` 在最左图标轨打开独立工作区 |
 | `contributes.triggers` | `{symbol: "#", name}`；需 `ui.slot`；`@` 与 `/` 属于宿主 |
 | `contributes.skills` | 本插件 skill 目录列表 |
 | `contributes.mcpServers` | `{name, command, args, env}` stdio 服务；需 `mcp.server`；支持 `${ENSO_PLUGIN_ROOT}` 占位符 |
@@ -191,9 +193,11 @@ MCP 服务名由宿主增加插件命名空间。同类贡献 id/name 不能重�
 ### 状态项、侧栏事件和文件查看器
 
 `ui.status.update(id,{text?,tooltip?,tone?,visible?})` 更新本插件声明的底栏状态项，可关联本插件命令；状态只在内存保留。
-`ui.view.open(viewId?)` 打开/聚焦已声明侧栏，`ui.view.emit(name,data?)` 向本插件已打开页面推送事件；常驻和定时任务也可发送。需 `ui.view`，每条数据最多 256KB，与状态更新共享每秒 20 次限流；没打开的页面不缓存事件。
+`ui.view.open(viewId?)` 按清单 `location` 打开/聚焦页面：缺省为右侧栏；`activitybar` 为主工作区，不创建对话或右侧标签。最左图标轨复用插件图标与标题，只显示已启用插件；停用/卸载立即撤销入口与页面。工作区固定在发起会话的上下文，不由后台会话改投当前项目；切回 Code 不改变会话、侧栏宽度或折叠偏好。`ui.view.emit(name,data?)` 向本插件已打开页面推送事件；常驻和定时任务也可发送。需 `ui.view`，每条数据最多 256KB，与状态更新共享每秒 20 次限流；没打开的页面不缓存事件。
 
-`ui.view.close(viewId?)` 对称关闭当前会话里本插件已声明的视图（默认首个视图），不能关闭其他插件/内置页面。仅当侧栏原先收起、由本插件 open 打开，且关闭时该页面仍为活动标签时，才同时收起侧栏；用户原先打开的侧栏保持打开。
+`ui.view.close(viewId?)` 对称关闭当前会话里本插件已声明的视图（默认首个视图），不能关闭其他插件/内置页面。工作区视图按插件、页面、会话三项精确匹配关闭；侧栏视图仅当侧栏原先收起、由本插件 open 打开，且关闭时该页面仍为活动标签时，才同时收起侧栏；用户原先打开的侧栏保持打开。
+
+左轨的直接点击不需要先启动模型；没有会话时页面方法只拿到 null 会话/项目上下文，可以管理插件自己的全局数据。它不放开 Node `ui.view.open`、草稿、项目文件或 Agent 等宿主 API 原有的会话与授权要求。
 
 HTML 中 `enso.on(name,listener)` / `onTheme(listener)` 返回取消函数，`enso.storage.get/set/remove` 同步读写页面快照，写入异步持久化。文件查看器同样运行在沙箱，额外有 `enso.file:{rel,text,onChange,update}`；读取的是当前文件编辑区（含未保存内容），`enso.file.update(text)` 只修改这个编辑区，不直接写盘，不能访问任意磁盘文件。插件脚本开始执行时桥已就绪，不需要等待额外 ready 事件。
 
@@ -325,8 +329,9 @@ Main 同时拦截插件子 frame 导航，仅允许本地 `plugin-view.html` 自
 </script>
 ```
 
-`window.enso.call(method, args)` 仅调用本插件 renderer.handle；`enso.theme` 为打开时 light/dark，
-`<html data-theme>` 同步该值，不实时跟随主题。停用/卸载/关闭页面会销毁端口和旧页面。
+`window.enso.call(method, args)` 仅调用本插件 renderer.handle；`enso.theme` 与 `<html data-theme>` 实时跟随 light/dark。
+宿主同时向沙箱根元素同步白名单 CSS 变量：背景/面板、文字/弱文字、primary/brand、边框、状态色、圆角和字体设置（如 `--panel`、`--foreground`、`--primary`、`--muted-foreground`、`--border`、`--font-family-sans`、`--font-size-base`）。同一浅深模式下切换强调色、浅色调色板或插件主题也会同步，不需要重建 iframe。只传有限长度的令牌值，不传任意 CSS、URL 或宿主 DOM；CSP 和 MessagePort 权限保持不变。`enso.onTheme(listener)` 仍收到兼容的 light/dark 字符串。
+这些位置与令牌扩展需要包含对应实现的宿主；旧安装版可能忽略 `location` 并只支持浅深标记。停用/卸载/关闭页面会销毁端口和旧页面。
 
 ## 预设与边界
 

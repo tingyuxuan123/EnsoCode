@@ -712,6 +712,12 @@
         return payload.result;
       }
 
+      function reportNotice(payload) {
+        const fields = payload.truncatedFields;
+        if (!Array.isArray(fields) || !fields.length) return '';
+        return `报告较大，仅展示部分明细（${fields.map((field) => `${field.path}：${field.returnedItems}/${field.totalItems}`).join('；')}）；汇总计数与退出码保持原值。`;
+      }
+
       function loadPage(method, args) {
         if (!isPresent() || busy) return;
         preview.hidden = true;
@@ -732,11 +738,13 @@
           }
           page = { method, args, cursor };
           next.hidden = !cursor;
-          const narrowed = context ? context.narrowed === true : payload.narrowed === true;
-          const limit = context ? context.limit : payload.limit;
+          const narrowed = payload.narrowed === true;
+          const limit = payload.limit;
+          const notice = reportNotice(payload);
+          if (notice) appendText(results, 'p', notice).className = 'hint';
           status.textContent = count
             ? `本页 ${count} 篇，共 ${total} 篇。${narrowed ? `结果较大，已自动缩小到每页 ${limit} 篇。` : ''}`
-            : '没有匹配文档。';
+            : (payload.hint ?? '没有匹配文档。');
         });
       }
 
@@ -783,7 +791,9 @@
               );
             overview.append(list);
           }
-          status.textContent = '已读取状态汇总。';
+          const notice = reportNotice(payload);
+          if (notice) appendText(overview, 'p', notice).className = 'hint';
+          status.textContent = `已读取状态汇总。${notice}`;
         });
       }
 
@@ -809,7 +819,9 @@
           deltaNext.hidden = !deltaCursor;
           const total = data.pagination?.totalItems;
           appendText(review, 'p', typeof total === 'number' ? `共 ${total} 项变化。` : '已读取变化报告。');
-          status.textContent = '已读取待复核列表。';
+          const notice = reportNotice(payload);
+          if (notice) appendText(review, 'p', notice).className = 'hint';
+          status.textContent = `已读取待复核列表。${notice}`;
         });
       }
 
@@ -825,7 +837,7 @@
           byId('report-text').textContent = JSON.stringify(data, null, 2);
           diagnostics.hidden = false;
           diagnostics.open = true;
-          status.textContent = title;
+          status.textContent = `${title}${reportNotice(payload)}`;
         });
       }
 

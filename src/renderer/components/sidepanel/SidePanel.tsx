@@ -62,6 +62,7 @@ import { cn } from '@/lib/utils';
 import { PluginIcon } from '@/plugins/PluginIcon';
 import { PluginView } from '@/plugins/PluginView';
 import { type PluginViewRef, usePluginViews } from '@/plugins/viewBridge';
+import { activitybarPluginViews, sidebarPluginViews } from '@/plugins/workspaceViews';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { isSidePanelExpanded, useSidePanelStore } from '@/stores/sidePanel';
@@ -380,6 +381,7 @@ function addPluginViewPanel(
   view: PluginViewRef,
   group?: IDockviewHeaderActionsProps['group']
 ): void {
+  if (view.location === 'activitybar') return;
   const id = `plugin:${view.pluginId}:${view.id}`;
   const existing = api.getPanel(id);
   if (existing) {
@@ -609,7 +611,7 @@ function NewTabMenu({
   compact?: boolean;
 }) {
   const { t } = useI18n();
-  const pluginViews = usePluginViews();
+  const pluginViews = sidebarPluginViews(usePluginViews());
   return (
     <Menu>
       <MenuTrigger
@@ -902,6 +904,13 @@ function ConversationDock({
     conversationId;
   const workflowAvailable = useWorkflowAvailable(projectId);
   const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
+  const pluginViews = usePluginViews();
+  // Updating a plugin's location also removes its previously persisted right-hand tabs.
+  useEffect(() => {
+    for (const view of activitybarPluginViews(pluginViews)) {
+      dockApi?.getPanel(`plugin:${view.pluginId}:${view.id}`)?.api.close();
+    }
+  }, [dockApi, pluginViews]);
   // 关掉工具时收起已开的工作流 tab；恢复布局带回来的也一并收掉
   useEffect(() => {
     if (!workflowAvailable) dockApi?.getPanel('workflow')?.api.close();

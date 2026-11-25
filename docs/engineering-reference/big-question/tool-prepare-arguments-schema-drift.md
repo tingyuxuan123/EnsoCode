@@ -60,6 +60,22 @@ ref/target/role；无 target 时清掉只用于标签定位的 role/nth。不得
 修复后重启隔离 Main/worker，两家模型均只用 navigate + act 完成四步，Main 权威历史的
 `browser_act` 均为 `isError: false`、`completed: 4`，且观察结果包含各自输入的唯一标记。
 
+## 原生插件的可选字段占位
+
+`codekiln.memory` 的隔离真机验收中，DeepSeek 省略新增记忆的 `id`，而 OpenAI Responses
+将可选字段填齐为 `id: ''`；原实现误入“更新已有记录”，模型反复失败。原生插件作者 API
+不提供 worker 侧 `prepareArguments`，不能假设 handler 能修复已经被宿主 schema 拒绝的参数。
+
+插件清单应先**显式接受有意义的可选占位**（如 nullable 可选类型和空日期），再在领域校验前
+仅移除已声明可选字段的 null/空串；必填 ID、非空非法 ID、错误类型与跨项目访问仍拒绝。
+新增和更新的身份边界不放宽，不能把任意错误 ID 降级成创建。回归应同时调用真实
+`validateToolArguments` 与插件处理器，不只直接调存储函数。
+
+回归：`examples/plugins/memory/test/main.test.mjs` 中真实 OpenAI 占位载荷；实现：
+`examples/plugins/memory/params.mjs` 与 `enso-plugin.json`。2026-11-25 隔离宿主中
+DeepSeek `auto/deepseek-v4.1-flash`、OpenAI `auto/gpt-6.1-sol` 均实际使用全部 7 个记忆工具，
+工具结果无语义失败，正文与待办持久化已核验。
+
 ## 相关代码
 
 - `src/shared/memory/toolParams.ts` — `normalizeMemoryCaptureParams` / `parseMemoryCaptureRequest`
