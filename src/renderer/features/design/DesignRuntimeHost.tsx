@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSessionsStore } from '@/stores/sessions';
 import { useSettingsStore } from '@/stores/settings';
 import { viewedDesignSessionId } from './host/activity-route';
@@ -7,6 +7,7 @@ import { useDesignLocale } from './host/locale';
 import { createMainDesignHost } from './host/main-host';
 import { createDesignToolActivity } from './host/tool-activity';
 import { setDesignViewingSession } from './runtime';
+import { onCanvasController } from './vetta/src/canvas/design-runtime';
 import './vetta/src/style.css';
 
 const mainHost = createMainDesignHost();
@@ -21,13 +22,27 @@ export function DesignRuntimeHost() {
   const viewingSessionId = useSessionsStore((state) =>
     viewedDesignSessionId(state.conversations, state.activeId)
   );
+  const [boundSession, setBoundSession] = useState<{ id: string | null } | null>(null);
   useEffect(() => {
+    let disposed = false;
+    setBoundSession(null);
     const streaming = viewingSessionId
       ? useSessionsStore.getState().conversations[viewingSessionId]?.status === 'running'
       : false;
-    void setDesignViewingSession(viewingSessionId, mainHost, streaming).catch((error) =>
-      console.warn('[design] runtime unavailable', error)
-    );
+    void setDesignViewingSession(viewingSessionId, mainHost, streaming)
+      .then(() => {
+        if (disposed) return;
+        const running = Boolean(
+          viewingSessionId &&
+            useSessionsStore.getState().conversations[viewingSessionId]?.status === 'running'
+        );
+        syncDesignConversationActivity(viewingSessionId, running);
+        setBoundSession({ id: viewingSessionId });
+      })
+      .catch((error) => console.warn('[design] runtime unavailable', error));
+    return () => {
+      disposed = true;
+    };
   }, [viewingSessionId]);
   const streaming = useSessionsStore((state) =>
     Boolean(viewingSessionId && state.conversations[viewingSessionId]?.status === 'running')
@@ -38,7 +53,8 @@ export function DesignRuntimeHost() {
   );
   // 工具调用 → 画布帧的「浏览中 / 修改中 / 创作中 / 已更新」。
   useEffect(() => {
-    const tracker = createDesignToolActivity();
+    if (!boundSession || boundSession.id !== viewingSessionId) return;
+    let tracker = createDesignToolActivity();
     const sync = () => {
       const conversation = viewingSessionId
         ? useSessionsStore.getState().conversations[viewingSessionId]
@@ -46,17 +62,26 @@ export function DesignRuntimeHost() {
       for (const event of tracker.sync(
         viewingSessionId,
         conversation?.messages ?? [],
-        conversation?.status === 'running'
+        conversation?.status === 'running',
+        Object.values(conversation?.designToolActivity ?? {})
       ))
         emitDesignConversation(event);
     };
-    sync();
-    return useSessionsStore.subscribe((state, previous) => {
+    const stopCanvas = onCanvasController((controller) => {
+      if (!controller) return;
+      tracker = createDesignToolActivity();
+      sync();
+    });
+    const stopStore = useSessionsStore.subscribe((state, previous) => {
       if (!viewingSessionId) return;
       if (state.conversations[viewingSessionId] === previous.conversations[viewingSessionId])
         return;
       sync();
     });
-  }, [viewingSessionId]);
+    return () => {
+      stopCanvas();
+      stopStore();
+    };
+  }, [viewingSessionId, boundSession]);
   return null;
 }

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { withFileMutationQueue } from '@earendil-works/pi-coding-agent';
 import type { AppliedFileChange } from '@shared/types/fileChanges';
 import { APPLY_PATCH_NO_EDITS_HINT } from './guidance';
+import { APPLY_PATCH_LIMITS } from './limits';
 import { createLocalApplyPatchIo, normalizePatchPath } from './localIo';
 import { parseApplyPatch, requireApplyPatchInput } from './parser';
 import { applyUpdateChunks, decodePatchText, type MatchBudget } from './text';
@@ -14,14 +15,7 @@ import type {
 } from './types';
 import { PatchMutationUncertainError } from './types';
 
-export const APPLY_PATCH_LIMITS = {
-  patchBytes: 1024 * 1024,
-  files: 100,
-  chunks: 1000,
-  fileBytes: 4 * 1024 * 1024,
-  totalReadBytes: 16 * 1024 * 1024,
-  comparisons: 1_000_000,
-} as const;
+export { APPLY_PATCH_LIMITS } from './limits';
 
 interface ReadyPlan extends ApplyPatchPlan {
   io: PatchIo;

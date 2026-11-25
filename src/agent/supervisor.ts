@@ -40,6 +40,7 @@ import {
   WORKSPACE_WRITE_TOOL_ID,
 } from '@shared/childProfileTools';
 import { type CompactStrategy, resolveCompactStrategy } from '@shared/compactStrategy';
+import type { DesignActivityCall } from '@shared/design/toolActivity';
 import { DEVICE_TOOLS_BUILTIN_ID } from '@shared/device-tools';
 import {
   PLUGIN_AGENT_ARGS_MAX_CHARS,
@@ -188,6 +189,7 @@ import {
   previewModelDirectoryPush,
   registerCustomProviderModels,
 } from './customProviderRegistry';
+import { executingDesignActivityCalls } from './designActivity';
 import { DesignPresence, designGateExtension, designToolNames } from './designGate';
 import { createNormalizedEditTool } from './editTool';
 import type { EnsoCompactOptions } from './ensoCompact/types';
@@ -443,6 +445,7 @@ interface ManagedSession {
   /** 最近一次 turn_start 时刻；pi 在发起每次模型请求前触发，下一条 assistant message_start 消费 */
   requestStartMs?: number;
   toolStartAt: Map<string, number>;
+  designToolCalls: Map<string, DesignActivityCall[]>;
   toolTimings: Map<string, { durationMs: number; completedAt: number }>;
   /** 流式增量合并窗口：窗口内只记下待发下标，窗口结束或遇到其他事件时发最新正文 */
   upsertTimer?: ReturnType<typeof setTimeout>;
@@ -3951,6 +3954,7 @@ export class SessionSupervisor {
       ...(opts.requestBudget ? { requestBudget: opts.requestBudget } : {}),
       timings: [],
       toolStartAt: new Map(),
+      designToolCalls: new Map(),
       toolTimings: new Map(),
       gate,
       asks: opts.asks ?? this.createAskManager(identity, gate.humanTimeoutMs),
@@ -4933,8 +4937,20 @@ export class SessionSupervisor {
         return;
       }
       case 'tool_execution_start': {
-        // codemode 嵌套调用只进脚本，不上时间线
-        if (event.parentToolCallId) return;
+        // Nested tools stay off the transcript, but still light up the design canvas.
+        if (event.parentToolCallId) {
+          const calls = executingDesignActivityCalls(event.toolCallId, event.toolName, event.args);
+          if (calls.length) {
+            managed.designToolCalls.set(event.toolCallId, calls);
+            this.options.emit({
+              type: 'design-tool-activity',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              calls,
+            });
+          }
+          return;
+        }
         // 耗时只从真正开始执行算：同轮后发工具不能把前面 bash 的排队算进去
         if (!managed.toolStartAt.has(event.toolCallId)) {
           const startedAt = Date.now();
@@ -4996,7 +5012,18 @@ export class SessionSupervisor {
         return;
       }
       case 'tool_execution_end': {
-        if (event.parentToolCallId) return;
+        if (event.parentToolCallId) {
+          const calls = managed.designToolCalls.get(event.toolCallId);
+          managed.designToolCalls.delete(event.toolCallId);
+          if (calls?.length)
+            this.options.emit({
+              type: 'design-tool-activity',
+              identity: managed.identity,
+              seq: ++managed.seq,
+              calls: calls.map((call) => ({ ...call, isError: event.isError === true })),
+            });
+          return;
+        }
         const start = managed.toolStartAt.get(event.toolCallId);
         managed.toolStartAt.delete(event.toolCallId);
         if (start !== undefined) {
@@ -5589,6 +5616,7 @@ export class SessionSupervisor {
 
   private emitStatus(managed: ManagedSession, error?: string): void {
     this.flushStreamingUpsert(managed);
+    if (managed.status !== 'running') managed.designToolCalls.clear();
     this.options.emit({
       type: 'status',
       identity: managed.identity,
@@ -5817,11 +5845,13 @@ export class SessionSupervisor {
   private snapshotSessions(): SessionSnapshot[] {
     return Array.from(this.sessions.values()).map((managed) => {
       const backgroundTasks = this.bgTasks.snapshot(managed.identity.sessionId);
+      const designToolActivity = [...managed.designToolCalls.values()].flat().slice(0, 128);
       return {
         identity: managed.identity,
         status: managed.status,
         messages: managed.messages,
         commands: managed.commands,
+        ...(designToolActivity.length ? { designToolActivity } : {}),
         ...(managed.requestBody ? { requestBody: managed.requestBody } : {}),
         ...(managed.gate.snapshot().length > 0
           ? { pendingApprovals: managed.gate.snapshot() }

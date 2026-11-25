@@ -1,6 +1,6 @@
 import type { ProjectedMessage } from '@shared/types/agent';
 import { describe, expect, it } from 'vitest';
-import { createDesignToolActivity } from './tool-activity';
+import { createDesignActivityReplay, createDesignToolActivity } from './tool-activity';
 
 const user = (text: string): ProjectedMessage => ({
   role: 'user',
@@ -19,6 +19,33 @@ const result = (id: string, name: string, isError = false): ProjectedMessage => 
 });
 
 describe('createDesignToolActivity', () => {
+  it('buffers activity before the detached canvas is ready and replays only unfinished calls', () => {
+    const replay = createDesignActivityReplay();
+    const start = {
+      type: 'tool-call-args' as const,
+      toolCallId: 'a',
+      toolName: 'read',
+      args: { path: 'd.vetd/frames/a.tsx' },
+    };
+    replay.accept([start, { ...start, toolCallId: 'b' }], false);
+    replay.accept(
+      [{ type: 'tool-call-end', toolCallId: 'a', toolName: 'read', isError: false }],
+      false
+    );
+    expect(replay.pending()).toEqual([{ ...start, toolCallId: 'b' }]);
+    const end = {
+      type: 'tool-call-end' as const,
+      toolCallId: 'b',
+      toolName: 'read',
+      isError: true,
+    };
+    expect(replay.accept([end], true)).toEqual([end]);
+    expect(replay.pending()).toEqual([]);
+    replay.accept([start], false);
+    replay.clear();
+    expect(replay.pending()).toEqual([]);
+  });
+
   it('流式参数露出路径即发 tool-call-args，结果落地发 tool-call-end', () => {
     const tracker = createDesignToolActivity();
     expect(tracker.sync('s1', [user('go')], true)).toEqual([]);
@@ -142,6 +169,43 @@ describe('createDesignToolActivity', () => {
         args: { path: 'd.vetd/frames/a.tsx' },
       },
       { type: 'tool-call-end', toolCallId: 'c1', toolName: 'edit', isError: false },
+    ]);
+  });
+
+  it('codemode 的运行时活动与结束信号只转发一次，不依赖 assistant 正文', () => {
+    const tracker = createDesignToolActivity();
+    tracker.sync('s1', [], true);
+    const nested = { id: 'code/1', toolName: 'read' as const, path: 'd.vetd/frames/a.tsx' };
+    expect(tracker.sync('s1', [], true, [nested])).toEqual([
+      {
+        type: 'tool-call-args',
+        toolCallId: 'code/1',
+        toolName: 'read',
+        args: { path: nested.path },
+      },
+    ]);
+    expect(tracker.sync('s1', [], true, [nested])).toEqual([]);
+    expect(tracker.sync('s1', [], true, [{ ...nested, isError: false }])).toEqual([
+      { type: 'tool-call-end', toolCallId: 'code/1', toolName: 'read', isError: false },
+    ]);
+    expect(tracker.sync('s1', [], true, [{ ...nested, isError: false }])).toEqual([]);
+  });
+
+  it('打开运行中的会话时补回在途工具，但不回放已经完成的活动', () => {
+    const tracker = createDesignToolActivity();
+    expect(
+      tracker.sync('s1', [call('r', 'read', { path: 'd.vetd/frames/a.tsx' })], true)
+    ).toHaveLength(1);
+    const nested = { id: 'code/1', toolName: 'edit' as const, path: 'd.vetd/frames/a.tsx' };
+    expect(
+      tracker.sync('s2', [], true, [nested, { ...nested, id: 'code/2', isError: false }])
+    ).toEqual([
+      {
+        type: 'tool-call-args',
+        toolCallId: 'code/1',
+        toolName: 'edit',
+        args: { path: nested.path },
+      },
     ]);
   });
 

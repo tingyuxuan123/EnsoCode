@@ -48,6 +48,33 @@ const tool = {
 afterEach(() => vi.useRealTimers());
 
 describe('design window IPC', () => {
+  it('info replays only unfinished activity after the renderer has subscribed', () => {
+    const { handlers, toSession } = setup();
+    handlers.state(MAIN, {
+      sessionId: 'root',
+      streaming: true,
+      events: [tool, { ...tool, toolCallId: 't2' }],
+    });
+    handlers.state(MAIN, {
+      sessionId: 'root',
+      streaming: true,
+      events: [{ type: 'tool-call-end', toolCallId: 't2', toolName: 'edit', isError: false }],
+    });
+    toSession.length = 0; // initial pushes were sent before the window listener existed
+    handlers.info(DESIGN);
+    expect(toSession).toEqual([
+      {
+        sessionId: 'root',
+        channel: IPC_CHANNELS.DESIGN_WINDOW_STATE,
+        payload: { sessionId: 'root', streaming: true, events: [tool] },
+      },
+    ]);
+    handlers.windowsChanged([]);
+    toSession.length = 0;
+    handlers.info(DESIGN);
+    expect(toSession).toEqual([]);
+  });
+
   it('only the main window opens windows, for sessions Main resolves to a local root', async () => {
     const { handlers, deps } = setup();
     expect(await handlers.open(DESIGN, 'root')).toMatchObject({ ok: false });

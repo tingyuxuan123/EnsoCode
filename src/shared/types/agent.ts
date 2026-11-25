@@ -30,6 +30,7 @@ import {
 import { type CodeSearchConfig, parseCodeSearchConfig } from '../codeSearch';
 import { type CompactStrategy, parseCompactStrategy } from '../compactStrategy';
 import type { DefaultModelRef } from '../defaultModel';
+import { type DesignActivityCall, isDesignActivityCalls } from '../design/toolActivity';
 import { isDesignToolResult } from '../design/toolResult';
 import { parsePluginArtifactInfo } from '../extensionPlugins/artifacts';
 import {
@@ -1742,6 +1743,8 @@ export interface SessionSnapshot {
   identity: SessionIdentity;
   status: NodeStatus;
   messages: ProjectedMessage[];
+  /** Live worker-only feedback for renderer reconnect; never part of JSONL. */
+  designToolActivity?: DesignActivityCall[];
   /**
    * messages 的绝对起始 index。尾窗快照（手机 pair / 桌面 resume 首包）会设置：
    * 长对话只发最近一段；全量快照缺省或 0。
@@ -2022,6 +2025,13 @@ export type AgentWorkerEvent =
       maxAttempts: number;
       delayMs: number;
       error: string;
+    }
+  /** Codemode file feedback is transient and does not create transcript messages. */
+  | {
+      type: 'design-tool-activity';
+      identity: SessionIdentity;
+      seq: number;
+      calls: DesignActivityCall[];
     }
   /** 工具执行中的输出快照（pi tool_execution_update 节流下发）：工具行运行中即可展开查看 */
   | {
@@ -3573,6 +3583,7 @@ export function parseSessionSnapshot(value: unknown): SessionSnapshot | null {
       'compactionNoticeAt',
       'planState',
       'requestBody',
+      'designToolActivity',
     ]) ||
     !parseAnySessionIdentity(value.identity) ||
     (value.status !== 'idle' && value.status !== 'running' && value.status !== 'failed') ||
@@ -3588,6 +3599,10 @@ export function parseSessionSnapshot(value: unknown): SessionSnapshot | null {
     (value.child !== undefined && parseChildConversationMetadata(value.child) === null) ||
     (value.planState !== undefined && parsePlanState(value.planState) === null) ||
     (value.requestBody !== undefined && parseRequestBodyUsage(value.requestBody) === null) ||
+    (value.designToolActivity !== undefined &&
+      (!isDesignActivityCalls(value.designToolActivity) ||
+        value.status !== 'running' ||
+        value.designToolActivity.some((call) => call.isError !== undefined))) ||
     (value.pendingAsks !== undefined &&
       (!Array.isArray(value.pendingAsks) || !value.pendingAsks.every(isAskRequestInfo))) ||
     (value.safeJournal !== undefined && parseSafeJournalProjection(value.safeJournal) === null) ||
@@ -4809,6 +4824,11 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
         ? ({ ...value, run } as unknown as AgentWorkerEvent)
         : null;
     }
+    case 'design-tool-activity':
+      return hasExactKeys(value, ['type', 'identity', 'seq', 'calls']) &&
+        isDesignActivityCalls(value.calls)
+        ? (value as unknown as AgentWorkerEvent)
+        : null;
     case 'tool-output':
       return isNonEmptyString(value.toolCallId) &&
         typeof value.output === 'string' &&

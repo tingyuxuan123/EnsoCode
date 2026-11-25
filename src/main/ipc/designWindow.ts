@@ -90,6 +90,10 @@ export function createDesignWindowHandlers(deps: {
   timeoutMs?: number;
 }) {
   const streaming = new Map<string, boolean>();
+  const activeTools = new Map<
+    string,
+    Map<string, Extract<DesignWindowActivityEvent, { type: 'tool-call-args' }>>
+  >();
   const pending = new Map<string, Pending>();
   return {
     async open(senderId: number, raw: unknown): Promise<DesignWindowResult> {
@@ -106,6 +110,14 @@ export function createDesignWindowHandlers(deps: {
     info(senderId: number): DesignWindowInfo {
       const bound = deps.boundSession(senderId);
       if (!bound) return { ok: false, error: 'forbidden' };
+      // The receiver subscribes before info(). Initial pushes may predate its listener.
+      const events = [...(activeTools.get(bound)?.values() ?? [])];
+      if (streaming.get(bound) && events.length)
+        deps.sendToSession(bound, IPC_CHANNELS.DESIGN_WINDOW_STATE, {
+          sessionId: bound,
+          streaming: true,
+          events,
+        });
       return { ok: true, sessionId: bound, streaming: streaming.get(bound) ?? false };
     },
     state(senderId: number, raw: unknown): DesignWindowResult {
@@ -114,6 +126,16 @@ export function createDesignWindowHandlers(deps: {
       if (!state || !deps.sessions().includes(state.sessionId))
         return { ok: false, error: 'invalid' };
       streaming.set(state.sessionId, state.streaming);
+      if (!state.streaming) activeTools.delete(state.sessionId);
+      else {
+        const active = activeTools.get(state.sessionId) ?? new Map();
+        for (const event of state.events) {
+          if (event.type === 'tool-call-end') active.delete(event.toolCallId);
+          else if (active.size < MAX_EVENTS || active.has(event.toolCallId))
+            active.set(event.toolCallId, event);
+        }
+        activeTools.set(state.sessionId, active);
+      }
       deps.sendToSession(state.sessionId, IPC_CHANNELS.DESIGN_WINDOW_STATE, state);
       return { ok: true };
     },
@@ -176,6 +198,7 @@ export function createDesignWindowHandlers(deps: {
     },
     windowsChanged(sessions: string[]): void {
       for (const id of streaming.keys()) if (!sessions.includes(id)) streaming.delete(id);
+      for (const id of activeTools.keys()) if (!sessions.includes(id)) activeTools.delete(id);
     },
   };
 }

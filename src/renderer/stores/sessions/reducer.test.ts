@@ -77,6 +77,42 @@ describe('applyHistoryPage', () => {
 });
 
 describe('applyAgentEvent', () => {
+  it('cold renderer restores only live file activities from the worker snapshot', () => {
+    const call = { id: 'code/1', toolName: 'read' as const, path: 'd.vetd/frames/a.tsx' };
+    const live = { ...snapshot(), status: 'running' as const, designToolActivity: [call] };
+    const state = applyAgentEvent(base, 's1', { type: 'snapshot', sessions: [live] }, 1);
+    expect(state.designToolActivity).toEqual({ 'code/1': call });
+    const idle = applyAgentEvent(state, 's1', { type: 'snapshot', sessions: [snapshot()] }, 2);
+    expect(idle.designToolActivity).toBeUndefined();
+  });
+
+  it('设计工具活动按 seq/generation 归并，独立于正文，并在轮次结束时清理', () => {
+    const call = { id: 'code/1', toolName: 'read' as const, path: 'd.vetd/frames/a.tsx' };
+    const event = {
+      type: 'design-tool-activity' as const,
+      identity: identity(),
+      seq: 2,
+      calls: [call],
+    };
+    let state = applyAgentEvent(base, 's1', status(1, 'running'), 1);
+    state = applyAgentEvent(state, 's1', event, 2);
+    expect(state.designToolActivity).toEqual({ 'code/1': call });
+    expect(state.messages).toEqual([]);
+    expect(applyAgentEvent(state, 's1', { ...event, identity: identity('old'), seq: 3 }, 3)).toBe(
+      state
+    );
+    expect(applyAgentEvent(state, 's1', { ...event, seq: 1 }, 3)).toBe(state);
+    state = applyAgentEvent(
+      state,
+      's1',
+      { ...event, seq: 3, calls: [{ ...call, isError: false }] },
+      3
+    );
+    expect(state.designToolActivity?.['code/1'].isError).toBe(false);
+    state = applyAgentEvent(state, 's1', status(4, 'idle'), 4);
+    expect(state.designToolActivity).toBeUndefined();
+  });
+
   it('保留本代 spawn 原因，新代 ready 后清理，旧代拒绝不能影响新代', () => {
     const rejected = applyAgentEvent({ ...base, generation: 'g1' }, 's1', {
       type: 'parent-rejected',

@@ -21,6 +21,22 @@ const conv = (id: string, extra: { title?: string; text?: string } = {}) => ({
 });
 
 describe('cachedPartializeSessions', () => {
+  it('设计帧活动只在内存中，不保存为下次启动的动画状态', () => {
+    const persisted = cachedPartializeSessions({
+      conversations: {
+        a: {
+          ...conv('a'),
+          designToolActivity: {
+            'code/1': { id: 'code/1', toolName: 'read', path: 'd.vetd/frames/a.tsx' },
+          },
+        },
+      },
+      order: ['a'],
+      activeId: 'a',
+    });
+    expect(persisted.conversations.a.designToolActivity).toBeUndefined();
+  });
+
   it('spawn 拒绝记录是运行态，不能跨重启阻止新代恢复', () => {
     const persisted = cachedPartializeSessions({
       conversations: {

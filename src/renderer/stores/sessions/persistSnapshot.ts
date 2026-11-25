@@ -32,6 +32,7 @@ function persistOne(conversation: PersistableConversation): PersistableConversat
     runStartedAt: _runStartedAt,
     lastOutputAt: _lastOutputAt,
     toolOutputs: _toolOutputs,
+    designToolActivity: _designToolActivity,
     toolStartedAt: _toolStartedAt,
     toolDeadlineAt: _toolDeadlineAt,
     pendingApprovals: _pendingApprovals,

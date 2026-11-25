@@ -2762,6 +2762,45 @@ describe('device-tool-invoke / device-tool-result', () => {
   });
 });
 
+describe('design-tool-activity 事件跨进程边界', () => {
+  it('live snapshots accept only unfinished activities on a running worker', () => {
+    const call = { id: 'c/1', toolName: 'read', path: 'd.vetd/frames/a.tsx' };
+    const session = {
+      identity: parent,
+      status: 'running',
+      messages: [],
+      commands: [],
+      designToolActivity: [call],
+    };
+    const event = { type: 'snapshot', sessions: [session] };
+    expect(parseAgentWorkerEvent(event)).toEqual(event);
+    for (const bad of [
+      { ...session, status: 'idle' },
+      { ...session, designToolActivity: [{ ...call, isError: false }] },
+      { ...session, designToolActivity: [{ ...call, content: 'private' }] },
+    ]) {
+      expect(parseAgentWorkerEvent({ ...event, sessions: [bad] })).toBeNull();
+    }
+  });
+
+  it('只接受有界路径级状态，拒绝正文、非法工具和空活动', () => {
+    const call = { id: 'code/1', toolName: 'read', path: 'd.vetd/frames/a.tsx' };
+    const event = { type: 'design-tool-activity', identity: parent, seq: 3, calls: [call] };
+    expect(parseAgentWorkerEvent(event)).toEqual(event);
+    expect(parseAgentWorkerEvent({ ...event, calls: [{ ...call, isError: true }] })).not.toBeNull();
+    for (const calls of [
+      [],
+      [{ ...call, toolName: 'bash' }],
+      [{ ...call, path: 1 }],
+      [{ ...call, content: 'private' }],
+      [{ ...call, isError: 'false' }],
+    ]) {
+      expect(parseAgentWorkerEvent({ ...event, calls })).toBeNull();
+    }
+    expect(parseAgentWorkerEvent({ ...event, args: { content: 'private' } })).toBeNull();
+  });
+});
+
 describe('tool-output 事件跨进程边界', () => {
   const event = {
     type: 'tool-output',

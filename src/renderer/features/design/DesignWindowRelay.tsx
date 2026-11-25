@@ -33,7 +33,8 @@ export function DesignWindowRelay() {
       const events = entry.tracker.sync(
         id,
         conversation?.messages ?? [],
-        streaming
+        streaming,
+        Object.values(conversation?.designToolActivity ?? {})
       ) as DesignWindowActivityEvent[];
       if (!force && events.length === 0 && streaming === entry.streaming) return;
       entry.streaming = streaming;

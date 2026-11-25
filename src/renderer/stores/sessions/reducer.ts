@@ -1,3 +1,4 @@
+import type { DesignActivityCall } from '@shared/design/toolActivity';
 import { type PlanState, splitPlanPrefix } from '@shared/planMode';
 import { truncatedProjectionHead } from '@shared/projectedText';
 import { parseLeadingSkillCommands, restoreSkillCommands } from '@shared/skillCommands';
@@ -280,6 +281,8 @@ export interface SessionProjection {
   retry?: { attempt: number; maxAttempts: number; delayMs: number; error: string; at: number };
   /** 运行中工具的输出快照（toolCallId → 全量文本）；轮次收口即清空，不持久化 */
   toolOutputs: Record<string, string>;
+  /** Codemode file feedback, scoped to this generation/turn; never persisted. */
+  designToolActivity?: Record<string, DesignActivityCall>;
   /** 工具真正开始执行的 wall clock；轮次收口即清空，不持久化 */
   toolStartedAt?: Record<string, number>;
   /** 运行中前台命令的超时截止 wall clock；工具收口 / 轮次收口即清空，不持久化 */
@@ -430,6 +433,12 @@ export function applyAgentEvent(
       toolOutputs: continuingRun ? omitKeys(state.toolOutputs, completedTools) : {},
       toolStartedAt: continuingRun ? omitKeys(state.toolStartedAt ?? {}, completedTools) : {},
       toolDeadlineAt: continuingRun ? omitKeys(state.toolDeadlineAt ?? {}, completedTools) : {},
+      designToolActivity:
+        running && snapshot.designToolActivity
+          ? Object.fromEntries(snapshot.designToolActivity.map((call) => [call.id, call]))
+          : continuingRun
+            ? state.designToolActivity
+            : undefined,
       historyBaseIndex: keepPrefix ? localBase : snapBase > 0 ? snapBase : undefined,
       ...(snapshot.planState ? { planState: snapshot.planState } : {}),
     };
@@ -734,6 +743,15 @@ export function applyAgentEvent(
       };
     case 'background-tasks-level':
       return { ...current, backgroundTasks: event.tasks, lastSeq: event.seq };
+    case 'design-tool-activity':
+      return {
+        ...current,
+        designToolActivity: {
+          ...current.designToolActivity,
+          ...Object.fromEntries(event.calls.map((call) => [call.id, call])),
+        },
+        lastSeq: event.seq,
+      };
     case 'tool-output': {
       const startedAt = current.toolStartedAt?.[event.toolCallId] ?? event.startedAt;
       return {
@@ -851,10 +869,13 @@ export function applyDispatchEvent(
 
 /** 结算进行中的 running 计时：把 runStartedAt 到 now 的时长并入 activeMs */
 function settleTiming(state: SessionProjection, now: number): SessionProjection {
-  if (state.runStartedAt === undefined) return state;
+  if (state.runStartedAt === undefined && !state.designToolActivity) return state;
   return {
     ...state,
-    activeMs: state.activeMs + Math.max(0, now - state.runStartedAt),
+    ...(state.designToolActivity ? { designToolActivity: undefined } : {}),
+    activeMs:
+      state.activeMs +
+      (state.runStartedAt === undefined ? 0 : Math.max(0, now - state.runStartedAt)),
     runStartedAt: undefined,
     lastOutputAt: undefined,
   };

@@ -36,6 +36,13 @@ Open Vetta 的业务代码保留在 `src/renderer/features/design/vetta/`，宿�
 
 ## UI 与项目
 
+- 帧上的「浏览中 / 修改中 / 创作中」由真实文件工具活动驱动，不以会话 running
+  猜测。顶层调用从流式正文投影提取；codemode 嵌套调用不上聊天时间线，worker 另发
+  路径级 `design-tool-activity`，经同一 generation/seq 守卫进入瞬态投影，再由主窗口
+  和独立窗口 relay 复用同一个活动适配器。通知不携带文件正文，不持久化，轮次终态清理；
+  读写路径与流式补丁头提取在 `src/shared/design/toolActivity.ts`，执行期补丁复用工具自身
+  parser，不能把 hunk 上下文中的示例当路径。worker 实时快照携带在途活动；窗口异步
+  绑定和 controller 就绪后只补回未完成调用，不回放已完成历史。
 - 会话顶栏「打开画布」只消费当前会话那次扫描的设计包快照，不单独遍历磁盘；选择时复用
   文件树的打开路径，核对快照的规范根和当前 owner，防止切会话或 worktree 后打开同名文件。
   冷挂载的 Dock 先一次性设置打开及最大宽度，再排队挂画布，避免先露出默认宽度。

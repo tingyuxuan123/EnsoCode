@@ -9,8 +9,13 @@ import {
   syncDesignConversationActivity,
 } from '@/features/design/host/context';
 import { useDesignLocale } from '@/features/design/host/locale';
+import { createDesignActivityReplay } from '@/features/design/host/tool-activity';
 import { CanvasMount, useCanvasContribution } from '@/features/design/mounts/CanvasMount';
 import { bindDesignWindowSession } from '@/features/design/runtime';
+import {
+  getCanvasController,
+  onCanvasController,
+} from '@/features/design/vetta/src/canvas/design-runtime';
 import { useI18n } from '@/i18n';
 import { PluginThemeHost } from '@/plugins/PluginThemeHost';
 import { useSettingsStore } from '@/stores/settings';
@@ -48,23 +53,34 @@ function DesignWindowApp() {
   React.useEffect(() => {
     let disposed = false;
     let bound: string | null = null;
+    let boundCwd: string | null = null;
+    const replay = createDesignActivityReplay();
+    const ready = () => Boolean(boundCwd && getCanvasController(boundCwd));
+    const stopCanvas = onCanvasController((controller) => {
+      if (controller && ready())
+        for (const event of replay.pending()) emitDesignConversation(event);
+    });
     // 绑定完成（conversation-changed 发出）前到达的推送先留最新一条，绑定后补上运行状态。
     let early: DesignWindowState | null = null;
     // 主窗口推来的运行状态与工具活动（画布的「修改中 / 已更新」和备注派活闸门）。
     const stop = window.electronAPI.designWindow.onState((update) => {
       if (!bound) {
         early = update;
+        replay.accept(update.events, false);
+        if (!update.streaming) replay.clear();
         return;
       }
       if (update.sessionId !== bound) return;
       syncDesignConversationActivity(update.sessionId, update.streaming);
-      for (const event of update.events) emitDesignConversation(event);
+      for (const event of replay.accept(update.events, ready())) emitDesignConversation(event);
+      if (!update.streaming) replay.clear();
     });
     void (async () => {
       const info = await window.electronAPI.designWindow.info();
       if (!info.ok) throw new Error(info.error);
       const cwd = await bindDesignWindowSession(info.sessionId, info.streaming, host);
       bound = info.sessionId;
+      boundCwd = cwd;
       const pending = early as DesignWindowState | null;
       if (pending?.sessionId === bound) syncDesignConversationActivity(bound, pending.streaming);
       if (!disposed) setState({ sessionId: info.sessionId, cwd });
@@ -74,6 +90,8 @@ function DesignWindowApp() {
     return () => {
       disposed = true;
       stop();
+      stopCanvas();
+      replay.clear();
     };
   }, []);
   const tab = useCanvasContribution();

@@ -1,3 +1,4 @@
+import { type DesignActivityCall, designActivityCalls } from '@shared/design/toolActivity';
 import type { ProjectedMessage } from '@shared/types/agent';
 import type { ConversationEvent } from '../vetta/sdk/conversation';
 
@@ -10,48 +11,20 @@ import type { ConversationEvent } from '../vetta/sdk/conversation';
  */
 type ToolActivityEvent = Extract<ConversationEvent, { type: 'tool-call-args' | 'tool-call-end' }>;
 
-interface ActivityCall {
-  id: string;
-  toolName: 'read' | 'edit' | 'write';
-  path: string;
-}
-
-const PATH_KEYS = ['path', 'file_path', 'filePath'] as const;
-const HASHLINE_HEADER = /^\[(.+)#([0-9A-Fa-f]{4})\]$/;
-const PATCH_HEADER = /^\*\*\* (Add File|Update File|Move to): (.+)$/;
-
-function directPath(args: Record<string, unknown>): string | undefined {
-  for (const key of PATH_KEYS) {
-    const value = args[key];
-    if (typeof value === 'string' && value) return value;
-  }
-  if (typeof args.input === 'string') {
-    const first = args.input.split('\n').find((line) => line.trim());
-    return first ? HASHLINE_HEADER.exec(first.trim())?.[1] : undefined;
-  }
-  return undefined;
-}
-
-function activityCalls(id: string, name: string, args: unknown): ActivityCall[] {
-  if (!args || typeof args !== 'object' || Array.isArray(args)) return [];
-  const record = args as Record<string, unknown>;
-  if (name === 'apply_patch') {
-    if (typeof record.input !== 'string') return [];
-    const calls: ActivityCall[] = [];
-    // 流式中最后一行可能是半截路径：只认已换行的完整头部。
-    const lines = record.input.split('\n');
-    lines.pop();
-    for (const line of lines) {
-      const match = PATCH_HEADER.exec(line.trim());
-      if (!match) continue;
-      const toolName = match[1] === 'Add File' ? 'write' : 'edit';
-      calls.push({ id: `${id}#${calls.length}`, toolName, path: match[2] });
-    }
-    return calls;
-  }
-  if (name !== 'read' && name !== 'edit' && name !== 'write') return [];
-  const path = directPath(record);
-  return path ? [{ id, toolName: name, path }] : [];
+/** Detached windows may receive activity before their async binding/controller is ready. */
+export function createDesignActivityReplay() {
+  const active = new Map<string, Extract<ToolActivityEvent, { type: 'tool-call-args' }>>();
+  return {
+    accept(events: readonly ToolActivityEvent[], ready: boolean): readonly ToolActivityEvent[] {
+      for (const event of events) {
+        if (event.type === 'tool-call-args') active.set(event.toolCallId, event);
+        else active.delete(event.toolCallId);
+      }
+      return ready ? events : [];
+    },
+    pending: (): ToolActivityEvent[] => [...active.values()],
+    clear: () => active.clear(),
+  };
 }
 
 /** 当前轮次窗口：最后一条 user 消息之后的部分（之前的调用都已收口）。 */
@@ -65,22 +38,39 @@ function turnWindow(messages: readonly ProjectedMessage[]): readonly ProjectedMe
 export function createDesignToolActivity() {
   let sessionId: string | null | undefined;
   /** toolCallId → 已发出的子调用（路径），用于去重与收场。 */
-  let lit = new Map<string, ActivityCall[]>();
+  let lit = new Map<string, DesignActivityCall[]>();
   let settled = new Set<string>();
 
   return {
     sync(
       nextSessionId: string | null,
       messages: readonly ProjectedMessage[],
-      running: boolean
+      running: boolean,
+      runtimeCalls: readonly DesignActivityCall[] = []
     ): ToolActivityEvent[] {
-      const window = turnWindow(messages);
+      const window = [...turnWindow(messages)];
+      // Runtime feedback has no transcript entry; adapt it without persisting synthetic messages.
+      for (const call of runtimeCalls) {
+        window.push({
+          role: 'assistant',
+          content: [
+            { type: 'toolCall', id: call.id, name: call.toolName, arguments: { path: call.path } },
+          ],
+        });
+        if (call.isError !== undefined)
+          window.push({
+            role: 'toolResult',
+            toolCallId: call.id,
+            isError: call.isError,
+            content: [],
+          });
+      }
       const results = new Map<string, boolean>();
       for (const message of window) {
         if (message.role === 'toolResult' && message.toolCallId)
           results.set(message.toolCallId, message.isError === true);
       }
-      // 首次同步或换了会话：现存调用一律当作历史，静默收下。
+      // Completed history stays silent; in-flight calls must resume on a mid-turn mount.
       const baseline = nextSessionId !== sessionId;
       if (baseline) {
         sessionId = nextSessionId;
@@ -96,12 +86,12 @@ export function createDesignToolActivity() {
           seen.add(part.id);
           if (settled.has(part.id)) continue;
           const isError = results.get(part.id);
-          if (baseline || (!running && isError === undefined)) {
+          if ((baseline && isError !== undefined) || (!running && isError === undefined)) {
             settled.add(part.id);
             continue;
           }
           const previous = lit.get(part.id) ?? [];
-          const calls = activityCalls(part.id, part.name, part.arguments);
+          const calls = designActivityCalls(part.id, part.name, part.arguments);
           for (const call of calls) {
             if (previous.some((p) => p.id === call.id && p.path === call.path)) continue;
             events.push({

@@ -318,6 +318,65 @@ describe('SessionSupervisor tool duration', () => {
     await supervisor.shutdown();
   });
 
+  it('codemode 文件调用发路径级活动，但不进入聊天正文或普通工具输出', async () => {
+    const events: AgentWorkerEvent[] = [];
+    const supervisor = new SessionSupervisor({
+      emit: (event) => events.push(event),
+      agentDir: '/tmp/agent',
+      sessionDir: mkdtempSync(path.join(tmpdir(), 'enso-design-activity-')),
+    });
+    try {
+      supervisor.handleCommand({
+        type: 'spawn-parent',
+        identity: parent,
+        cwd: '/workspace',
+        model,
+      });
+      await vi.runAllTimersAsync();
+      await waitFor(events, 'parent-ready');
+      const parentSession = mocks.sessions[0] as ReturnType<typeof session>;
+      parentSession.emit({ type: 'agent_start' });
+      const start = {
+        type: 'tool_execution_start',
+        parentToolCallId: 'code',
+        toolCallId: 'code/1',
+        toolName: 'write',
+        args: { path: 'd.vetd/frames/a.tsx', content: 'private body' },
+      };
+      parentSession.emit(start);
+      expect(events.filter((event) => event.type === 'design-tool-activity')).toMatchObject([
+        { calls: [{ id: 'code/1', toolName: 'write', path: 'd.vetd/frames/a.tsx' }] },
+      ]);
+      supervisor.handleCommand({ type: 'snapshot' });
+      await settle();
+      const liveSnapshot = events.findLast((event) => event.type === 'snapshot');
+      expect(
+        liveSnapshot?.type === 'snapshot' && liveSnapshot.sessions[0].designToolActivity
+      ).toEqual([{ id: 'code/1', toolName: 'write', path: 'd.vetd/frames/a.tsx' }]);
+      parentSession.emit({ ...start, type: 'tool_execution_end', isError: true });
+      expect(events.filter((event) => event.type === 'design-tool-activity')).toMatchObject([
+        { calls: [{ id: 'code/1', toolName: 'write', path: 'd.vetd/frames/a.tsx' }] },
+        {
+          calls: [{ id: 'code/1', toolName: 'write', path: 'd.vetd/frames/a.tsx', isError: true }],
+        },
+      ]);
+      expect(
+        events.some((event) => event.type === 'tool-output' && event.toolCallId === 'code/1')
+      ).toBe(false);
+      expect(
+        JSON.stringify(events.filter((event) => event.type === 'design-tool-activity'))
+      ).not.toContain('private body');
+      const input =
+        '*** Begin Patch\n*** Update File: d.vetd/frames/a.tsx\n@@\n-old\n+new\n*** End Patch';
+      parentSession.emit({ ...start, toolCallId: 'code/2', toolName: 'apply_patch', args: input });
+      expect(events.filter((event) => event.type === 'design-tool-activity').at(-1)).toMatchObject({
+        calls: [{ id: 'code/2#0', toolName: 'edit', path: 'd.vetd/frames/a.tsx' }],
+      });
+    } finally {
+      await supervisor.shutdown();
+    }
+  });
+
   it('assistant step 从 turn_start 起算，TTFT 含等待响应头的时间', async () => {
     const events: AgentWorkerEvent[] = [];
     const supervisor = new SessionSupervisor({
