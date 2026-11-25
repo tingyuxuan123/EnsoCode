@@ -12,6 +12,14 @@ const result = {
 };
 afterEach(() => vi.useRealTimers());
 describe('DesignInvoker', () => {
+  it('exposes a create tool that separates redesign references from implementation', () => {
+    const create = createDesignTools(new DesignInvoker(identity, vi.fn()))[0];
+    expect(create.description).toMatch(/explicitly selects vetta-ui-design.*redesign/);
+    expect(create.description).toContain('read-only reference');
+    expect(create.description).toMatch(/Do NOT use for.*production code/);
+    expect(create.description).not.toContain('decoupled from any codebase');
+    expect(create.description).toContain('generate_image');
+  });
   it.each([
     { ok: true, vetdPath: '/work/ride.vetd' },
     { ok: false, created: true, retryable: true, vetdPath: '/work/ride.vetd' },

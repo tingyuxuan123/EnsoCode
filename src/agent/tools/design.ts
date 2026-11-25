@@ -172,7 +172,7 @@ export function createDesignTools(
       label: name.replaceAll('_', ' '),
       description:
         name === 'vetd_create'
-          ? `${description}\nThis creates an editable TSX design document, not a generated picture. A request to draw/generate a poster image (海报), illustration or wallpaper belongs to generate_image when available; the word poster alone is not a reason to create a canvas. Use this for an explicitly requested editable layout/canvas, UI mockup, slides or .vetd sources.`
+          ? `${description}\nThis creates an editable TSX design document, not a generated picture. A request to draw/generate a poster image (海报), illustration or wallpaper belongs to generate_image when available; the word poster alone is not a reason to create a canvas.`
           : description,
       parameters: parameters as unknown as ToolDefinition['parameters'],
       // SDK calls this before schema validation, including nested codemode calls.

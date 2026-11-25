@@ -1,12 +1,19 @@
 ---
 name: vetta-ui-design
-description: "Build editable .vetd/TSX designs: UI mockups, slides, poster layouts, infographics or attached canvas frames. Not for drawing/generating pictures, illustrated posters (海报) or wallpapers: use generate_image/edit_image when available. Poster alone does not imply a canvas. Implement existing app pages in that repo, not on this canvas."
+description: "Create editable .vetd UI designs, slides, poster layouts and infographics, or edit attached canvas frames. Selecting this skill for a redesign requests a canvas draft, not production implementation. Use image tools for actual pictures, illustrated posters (海报) or wallpapers."
 ---
 
 # Vetta UI Design
 
-Drawn posters/pictures use `generate_image`, not this workflow. A canvas is for
-explicit editable layouts; never silently replace a picture with TSX/HTML/SVG.
+## Canvas draft or implementation?
+
+If this skill is explicitly selected in the current message, treat a UI redesign as a
+canvas design request, even for an existing app or plugin. Its files are read-only references.
+Open the requested `.vetd` or create one with `vetd_create`; write only inside it.
+Edit production files only if the user explicitly asks to implement or apply the
+design. If the canvas is unavailable or fails, report it; do not fall back to editing
+source or writing an HTML substitute. Use `generate_image` for actual drawn images,
+illustrated posters or wallpapers, never TSX/HTML/SVG as a substitute.
 
 A design document is ONE directory — `login-app.vetd/` — holding everything:
 
@@ -36,22 +43,8 @@ internalising before you start:
   overwritten seconds later. If a frame is not showing up the way you expect,
   the answer is always in the tsx.
 
-## The loop at a glance
-
-Every turn that designs something runs this sequence; each step is detailed
-under **Workflow** below.
-
-1. **Start**: a new document is `vetd_create` with the product type; an existing
-   one starts with `vetd_status` once.
-2. **Look**: a landing page is dealt directions, app screens propose their own
-   with `vetd_direction` `propose`; ask the look question, then `choose`. Apply
-   the direction (fonts, `theme.css`, pictures) before any frame.
-3. **Build**: shared shell and a short file per frame first, then real content in
-   coherent batches. Each frame's `frame` meta line comes first.
-4. **Verify**: one `vetd_screenshot` batch, Read the overview once, fix with
-   `edit`, recheck only the frames you changed.
-5. **Finish**: when you touched a `.vetd` design, the last action is one
-   `vetd_notes` call; then report.
+Follow **Workflow** below: start with `vetd_create` (new) or `vetd_status` (existing),
+set a direction, build frames, verify with `vetd_screenshot`, and finish with `vetd_notes`.
 
 ## It is a project, not a picture
 

@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   createAssistantMessageEventStream,
   InMemoryCredentialStore,
@@ -25,7 +26,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function harness(names = ['a', 'b']) {
+async function harness(names = ['a', 'b'], additionalSkillPaths: string[] = []) {
   const root = mkdtempSync(join(tmpdir(), 'enso-skills-sdk-'));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const skillPaths = names.map((name, index) => {
@@ -53,7 +54,7 @@ async function harness(names = ['a', 'b']) {
     noExtensions: true,
     additionalExtensionPaths: [plugin],
     noSkills: true,
-    additionalSkillPaths: skillPaths,
+    additionalSkillPaths: [...skillPaths, ...additionalSkillPaths],
     noPromptTemplates: true,
     noContextFiles: true,
     noThemes: true,
@@ -145,6 +146,21 @@ it('真实input handled阻止prompt和steer，不产生权威user或残留队列
   expect(stream).not.toHaveBeenCalled();
   expect(users()).toEqual([]);
   expect(session.getSteeringMessages()).toEqual([]);
+});
+
+it('显式选中内置 Vetta 后，真实 SDK 传入的技能正文把插件改版导向只写 .vetd', async () => {
+  const bundledSkill = fileURLToPath(
+    new URL('../../resources/design/skills/vetta-ui-design/SKILL.md', import.meta.url)
+  );
+  const { session, users } = await harness([], [bundledSkill]);
+  const input = '/skill:vetta-ui-design 这个插件有点丑需要重新设计一下';
+  await session.prompt(input);
+  expect(restoreSkillCommands(users()[0]!)).toBe(input);
+  const skill = parseSkillInvocation(users()[0]!)?.blocks[0]?.content;
+  expect(skill).toMatch(/explicitly (?:selected|invoked)[\s\S]*canvas design request/);
+  expect(skill).toContain('read-only references');
+  expect(skill).toMatch(/only if the user explicitly asks[\s\S]*implement/);
+  expect(skill).toMatch(/unavailable or fails[\s\S]*do not fall back to editing/);
 });
 
 it('真实steer不丢弃图像参数，原生单技能仍由pi展开且不添加新属性', async () => {

@@ -14,6 +14,11 @@ describe('图片与设计画布的模型路由提示', () => {
     expect(text).toContain('not vetd_create');
     expect(text).not.toContain('Use edit_image');
   });
+  it('显式选择设计技能已表达画布意图，不要求再写一遍「画布」', () => {
+    const text = imageGenerationRouting(new Set(['generate_image', 'vetd_create']));
+    expect(text).toMatch(/explicitly selecting vetta-ui-design.*counts/);
+    expect(text).toContain('Keep normal front-end implementation in the existing repository');
+  });
   it('只暴露已启用的改图能力，不暗示未授权的生图能力', () => {
     const text = imageGenerationRouting(new Set(['edit_image']))!;
     expect(text).toContain('Use edit_image');
