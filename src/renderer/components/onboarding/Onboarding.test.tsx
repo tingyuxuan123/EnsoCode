@@ -26,7 +26,6 @@ vi.mock('@/stores/settings', () => ({
 vi.mock('../settings/AgentTypesSettings', () => ({ AgentTypeList: () => null }));
 vi.mock('../settings/LocalAssetImportDialog', () => ({ LocalAssetImportDialog: () => null }));
 vi.mock('../settings/LocalImportDialog', () => ({ LocalImportDialog: () => null }));
-vi.mock('../settings/PresetsSettings', () => ({ PresetEditDialog: () => null }));
 vi.mock('../settings/ProviderSetupWizard', () => ({ ProviderSetupWizard: () => null }));
 
 let root: Root;
@@ -91,4 +90,28 @@ it('names a modal dialog, loops Tab in both directions, blocks background focus 
   }
   await act(async () => root.render(null));
   expect(document.activeElement).toBe(trigger);
+});
+
+it('引导不再有会话预设步骤，进度点与文案同步收窄', async () => {
+  await act(async () => root.render(<Onboarding />));
+  const stepLabels = () =>
+    [...container.querySelectorAll<HTMLHeadingElement>('h2')].map((heading) => heading.textContent);
+  const nextButton = () =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      ['Get started', 'Next'].includes(button.textContent ?? '')
+    );
+  const progress = () =>
+    container.querySelector('[data-slot="onboarding-step"]')?.parentElement?.textContent ?? '';
+
+  expect(stepLabels()).toContain('Welcome to CodeKiln');
+  const seen: string[] = [];
+  for (let step = 0; step < 10; step += 1) {
+    seen.push(...stepLabels());
+    const next = nextButton();
+    if (!next) break;
+    await act(async () => next.click());
+  }
+  expect(seen).not.toContain('Presets');
+  expect(container.textContent).not.toContain('New preset');
+  expect(progress()).toContain('/7');
 });

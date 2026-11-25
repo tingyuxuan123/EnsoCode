@@ -5,9 +5,9 @@ export function extractSkillQuery(text: string, cursor: number): string | null {
 }
 
 /** 技能按名称调用，同名（忽略大小写）只保留先出现的一条。 */
-export function dedupeSlashCommands(commands: readonly SlashCommand[]): SlashCommand[] {
+export function dedupeSlashCommands<T extends SlashCommand>(commands: readonly T[]): T[] {
   const seen = new Set<string>();
-  const unique: SlashCommand[] = [];
+  const unique: T[] = [];
   for (const command of commands) {
     const key = command.name.trim().toLowerCase();
     if (!key || seen.has(key)) continue;

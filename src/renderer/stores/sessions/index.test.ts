@@ -490,6 +490,40 @@ describe('typed Agent child projection', () => {
     );
   });
 
+  it('升级前保存的默认预设不再被新建普通会话继承', async () => {
+    settingsModule.useSettingsStore.setState({
+      presets: [{ id: 'legacy-preset', name: 'Legacy', skillIds: [], mcpServerIds: [] }],
+      defaultPresetId: 'legacy-preset',
+    });
+    nextConversationId = 'fresh-after-upgrade';
+
+    const createdId = await sessionsModule.useSessionsStore.getState().newConversation('project');
+    expect(createdId).toBe('fresh-after-upgrade');
+    expect(
+      sessionsModule.useSessionsStore.getState().conversations[createdId!].presetId
+    ).toBeUndefined();
+  });
+
+  it('已绑定非默认预设的空白草稿不会被普通新建隐式复用', async () => {
+    nextConversationId = 'legacy-preset-draft';
+    const draftId = await sessionsModule.useSessionsStore.getState().newConversation('project');
+    sessionsModule.useSessionsStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        [draftId!]: { ...state.conversations[draftId!], presetId: 'legacy-preset' },
+      },
+    }));
+    sessionsModule.useSessionsStore.getState().selectConversation('parent');
+    nextConversationId = 'plain-new';
+
+    const createdId = await sessionsModule.useSessionsStore.getState().newConversation('project');
+    expect(createdId).toBe('plain-new');
+    const conversations = sessionsModule.useSessionsStore.getState().conversations;
+    // 旧草稿保留原绑定，仍可主动打开
+    expect(conversations[draftId!].presetId).toBe('legacy-preset');
+    expect(conversations[createdId!].presetId).toBeUndefined();
+  });
+
   it('点击系统通知按正常选中流程打开会话：激活权威选择并清未读', async () => {
     const onFocusSession = vi.mocked(window.electronAPI.agent.onFocusSession);
     const focus = onFocusSession.mock.calls[0]?.[0] as (sessionId: string) => void;

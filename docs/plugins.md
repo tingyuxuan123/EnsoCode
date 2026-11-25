@@ -330,9 +330,10 @@ Main 同时拦截插件子 frame 导航，仅允许本地 `plugin-view.html` 自
 
 ## 预设与边界
 
-已启用插件的预设在聊天预设选择器和设置页只读显示，id 为 `plugin:<pluginId>:<presetId>`。
-附带 skills/MCP 只能引用本插件已声明项。被预设引用的资源只随选中该预设的新会话加载；其他全局插件资源随启用状态合并。
-指令与角色正文由 Main 从安装目录读取；插件停用、删除或预设失效后需重新选择可用预设。
+已启用插件的预设 id 为 `plugin:<pluginId>:<presetId>`，只能由本插件通过 `session.create` 显式创建会话时使用（见上文跨会话 API）。
+桌面版不再提供通用的会话预设选择器或设置页预设管理；新建普通会话按全局启用的 Skill/MCP/指令注入，不继承预设。
+附带 skills/MCP 只能引用本插件已声明项。被预设引用的资源只随该预设创建的会话加载；其他全局插件资源随启用状态合并。
+指令与角色正文由 Main 从安装目录读取；插件停用、删除或预设失效后需重新创建会话。已绑定该预设的历史会话与分支继续按原绑定恢复，不改写也不清除。
 清单会直接拒绝未接入的 `systemPromptTail`、`boostPrompt`、`refusalRetry`、`refusalRetryPrompt` 字段（即便为 false），不会读取后静默忽略。没有 server CLI 安装入口。
 `session.read` / `session.messages()` 当前不可用，请勿依赖。声明 commands 尚无桌面菜单入口。
 

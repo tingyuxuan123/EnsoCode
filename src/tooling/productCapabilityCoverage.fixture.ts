@@ -118,8 +118,12 @@ export const SETTINGS_DATA_COVERAGE = {
   plugins: excluded('Desktop-only Claude Code plugin import; plugin code runs on this device.'),
   mcpServers: surfaces('mcp.list'),
   instructions: surfaces('instructions.list'),
-  presets: surfaces('presets.list'),
-  defaultPresetId: surfaces('presets.set-default'),
+  presets: excluded(
+    'Retired conversation presets stay in settings only for existing session bindings and config sync.'
+  ),
+  defaultPresetId: excluded(
+    'Retired default-preset preference is preserved for legacy sessions but no longer applied to new ones.'
+  ),
   agentTypes: surfaces('agent-types.list'),
   subagentModelsEnabled: surfaces('providers.subagent-models.toggle'),
   subagentModels: surfaces('providers.subagent-models'),
@@ -286,10 +290,6 @@ export const SETTINGS_ACTION_COVERAGE = {
   addInstructions: surfaces('instructions.import-local'),
   updateInstruction: surfaces('instructions.toggle', 'instructions.edit-local-copy'),
   removeInstruction: surfaces('instructions.remove'),
-  addPreset: surfaces('presets.create'),
-  updatePreset: surfaces('presets.edit'),
-  removePreset: surfaces('presets.delete'),
-  setDefaultPresetId: surfaces('presets.set-default'),
   setSubagentModelsEnabled: surfaces('providers.subagent-models.toggle'),
   addSubagentModel: surfaces('providers.subagent-models.add'),
   updateSubagentModel: surfaces('providers.subagent-models.update'),
@@ -500,8 +500,6 @@ export const IPC_PRODUCT_COVERAGE = {
   WORKFLOW_PRESETS_READ: excluded('Settings workflow preset editor load.'),
   WORKFLOW_PRESETS_SAVE: excluded('Settings workflow preset editor save.'),
   WORKFLOW_PRESETS_DELETE: excluded('Settings workflow preset editor delete.'),
-  PRESETS_SYSTEM_PROMPT_READ: excluded('Settings-only preset editor content read.'),
-  PRESETS_SYSTEM_PROMPT_WRITE: excluded('Settings-only preset editor content write.'),
   AGENT_SPAWN: excluded('Lazy worker lifecycle command behind conversation send.'),
   AGENT_PROMPT: surfaces('conversations.send'),
   AGENT_STEER: surfaces('conversations.queue.send-now'),

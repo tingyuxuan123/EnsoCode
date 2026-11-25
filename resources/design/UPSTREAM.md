@@ -9,6 +9,8 @@
 - `engine/{index.html,vite.config.mjs,package.json,package-lock.json,src/**}`,
   `skills/vetta-ui-design/**`, and `agents/{designer.md,designer.webp}` are
   copied without source changes. Engine package version: **0.1.0**.
+- The same upstream plugin's `icon.png` is vendored unchanged in
+  `src/renderer/features/design/vetta/` for the command list and selected skill chip.
 
 ## Relocation checks
 

@@ -225,30 +225,6 @@ const STRING_ID_ARRAY_SCHEMA = {
   items: { type: 'string', minLength: 1 },
 } as const satisfies JsonSchema;
 
-const PRESET_FIELDS = {
-  name: { type: 'string', minLength: 1 },
-  skillIds: STRING_ID_ARRAY_SCHEMA,
-  mcpServerIds: STRING_ID_ARRAY_SCHEMA,
-  instructionId: { type: 'string', minLength: 1 },
-} as const satisfies Readonly<Record<string, JsonSchema>>;
-
-const PRESET_CREATE_INPUT_SCHEMA = {
-  type: 'object',
-  properties: PRESET_FIELDS,
-  required: ['name'],
-  additionalProperties: false,
-} as const satisfies JsonSchema;
-
-const PRESET_EDIT_INPUT_SCHEMA = {
-  type: 'object',
-  properties: {
-    id: { type: 'string', minLength: 1 },
-    ...PRESET_FIELDS,
-  },
-  required: ['id'],
-  additionalProperties: false,
-} as const satisfies JsonSchema;
-
 const AGENT_TYPE_FIELDS = {
   name: { type: 'string', minLength: 1 },
   description: { type: 'string' },
@@ -701,42 +677,6 @@ export const CAPABILITY_CATALOG = {
     risk: 'dangerous',
     targetContext: 'global',
     inputSchema: ID_INPUT_SCHEMA,
-  }),
-
-  'presets.list': executable('presets.list', readGlobal('List injection presets.')),
-  'presets.create': executable(
-    'presets.create',
-    reversibleGlobal(
-      'Create an injection preset from registered asset ids.',
-      PRESET_CREATE_INPUT_SCHEMA
-    )
-  ),
-  'presets.edit': executable(
-    'presets.edit',
-    reversibleGlobal('Edit an injection preset.', PRESET_EDIT_INPUT_SCHEMA)
-  ),
-  'presets.delete': executable('presets.delete', {
-    description: 'Delete an injection preset.',
-    risk: 'dangerous',
-    targetContext: 'global',
-    inputSchema: ID_INPUT_SCHEMA,
-  }),
-  'presets.set-default': executable(
-    'presets.set-default',
-    reversibleGlobal(
-      "Set the default preset applied to new conversations ('default' = built-in global preset).",
-      ID_INPUT_SCHEMA
-    )
-  ),
-  'presets.select-for-conversation': unavailable('presets.select-for-conversation', {
-    description: 'Select the preset for the origin conversation.',
-    risk: 'reversible',
-    targetContext: 'origin-conversation',
-    inputSchema: ID_INPUT_SCHEMA,
-    availability: [{ kind: 'origin-conversation' }],
-    reason:
-      'Source conversation configuration is not exposed through the CodeKiln gateway in this release.',
-    suggestedAction: 'Choose the preset from the source conversation model controls.',
   }),
 
   'agent-types.list': executable(
@@ -1340,11 +1280,6 @@ export const CAPABILITY_HANDLER_CONTRACT: Readonly<Record<ExecutableCapabilityId
   'instructions.read': true,
   'instructions.edit-local-copy': true,
   'instructions.remove': true,
-  'presets.list': true,
-  'presets.create': true,
-  'presets.edit': true,
-  'presets.delete': true,
-  'presets.set-default': true,
   'agent-types.list': true,
   'agent-types.create': true,
   'agent-types.edit': true,

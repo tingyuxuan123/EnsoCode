@@ -1269,11 +1269,8 @@ export const zhTranslations: Record<string, string> = {
     '为每个模型服务拉取模型，再启用你需要的。',
   'Fetch failed': '拉取失败',
   'No models yet': '暂无模型，点击拉取',
-  'Bundle skills, MCP servers and an instruction file into a preset (optional)':
-    '把技能、MCP 服务和一份指令组合成预设（可选）',
   'Give subagents their own model, skills and MCP servers (optional)':
     '为子代理配置专属模型、技能与 MCP 服务（可选）',
-  '{{count}} presets': '已有 {{count}} 个预设',
   'Model Providers': '模型中心',
   'Manage model API providers for this app': '管理应用的模型 API 服务',
   'Preset providers': '预设服务商',
@@ -1531,6 +1528,42 @@ export const zhTranslations: Record<string, string> = {
   'Remove chat reference': '移除会话引用',
   'Mention suggestions': '提及建议',
   'Command suggestions': '命令建议',
+  'Commands and skills': '命令与技能',
+  'Command options': '命令选项',
+  'System built-ins': '系统内置',
+  'Session commands': '会话命令',
+  'Project skills': '项目技能',
+  'Vetta Design': 'Vetta 设计',
+  'Design editable interfaces, slides, and interactive prototypes on the Vetta canvas.':
+    '在 Vetta 画布上制作可编辑的界面、幻灯片和交互原型。',
+  Capability: '能力',
+  '{{count}} results': '{{count}} 个结果',
+  'Command usage': '用法',
+  'Insert prompt': '填入提示词',
+  'Insert command': '填入输入框',
+  'No matching commands': '没有匹配的命令',
+  'Type in the message field to filter commands.': '在输入框中继续输入即可筛选命令。',
+  'Remove {{name}}': '移除 {{name}}',
+  'Describe a picture, poster, or wallpaper to generate in this conversation.':
+    '描述想要的画面，在当前会话中生成图片、海报或壁纸。',
+  'Describe the subject, style, and dimensions.': '描述画面、风格与尺寸。',
+  'Generate an image: ': '帮我生成一张图片：',
+  'Describe what a CodeKiln plugin should do and where people will use it.':
+    '描述 CodeKiln 插件要做什么，以及用户从哪里使用它。',
+  'Describe the purpose of the plugin and where it should appear.': '说明插件的用途和入口。',
+  'Help me build a CodeKiln plugin: ': '帮我制作一个 CodeKiln 插件：',
+  'Set a session goal': '设定会话目标',
+  'Set the objective for this conversation. You can pause it and resume it later.':
+    '设定这段会话要达成的目标。需要时可以暂停，之后再继续。',
+  '/goal <objective>': '/goal <目标>',
+  'Compact the conversation context. Optionally tell the agent what to preserve in the summary.':
+    '压缩当前会话的上下文。可以补充摘要重点，告诉 Agent 哪些信息要保留。',
+  '/compact [summary focus]': '/compact [摘要重点]',
+  'Enter plan mode': '进入计划模式',
+  'Let the agent investigate read-only and submit a plan before carrying it out.':
+    '让 Agent 先做只读调研，提交计划供你审批，再进入实施。',
+  '/plan [task]': '/plan [任务]',
+  'Exit plan mode': '退出计划模式',
   'Type @ to choose a file or Agent': '输入 @ 选择文件或 Agent',
   Recipient: '接收者',
   'Remove Agent recipient': '移除 Agent 接收者',
@@ -2664,32 +2697,9 @@ export const zhTranslations: Record<string, string> = {
   'Load local skills': '加载本机 skill',
   // Presets
   Presets: '预设',
-  'New preset': '新建预设',
-  'Edit preset': '编辑预设',
-  'Role descriptions, skills, MCP servers and instruction files, chosen per conversation':
-    '角色描述 / 技能 / MCP / 指令文件的组合，按对话选用',
-  'View default role description': '查看默认角色描述',
-  'Custom role': '自定义角色',
-  'Role description': '角色描述',
-  'Replace pi opening role description': '替换 pi 开头的角色描述',
-  'Built-in default (read-only)': '内置默认（只读）',
-  'System prompt cannot be empty': '系统提示词不能为空',
-  'Failed to save system prompt': '系统提示词保存失败',
-  'Failed to read system prompt': '系统提示词读取失败',
-  'Only replaces the opening role paragraph. Available tools and everything after it stay unchanged. Applies to new and cold-restored sessions.':
-    '仅替换开头的角色段落，Available tools 及之后的全部内容保持不变。新建及冷恢复的会话生效。',
-  'This is the pi opening role paragraph. Custom presets replace only this paragraph; tools, guidelines and project context stay unchanged.':
-    '这是 pi 开头的角色段落。自定义预设只替换这段，工具、使用准则和项目上下文均保持不变。',
   Global: '全局',
-  'Set as default': '设为默认',
   Default: '默认',
   None: '不注入',
-  'Injection bundles of skills, MCP servers and instruction files, chosen per conversation':
-    'skill / MCP / 指令文件的注入组合，按对话选用',
-  'Follows the enabled switches on the Skills / MCP / Instructions pages':
-    '跟随技能 / MCP / 指令文件页的启用开关',
-  '{{skills}} skills · {{mcp}} MCP · {{instruction}} instruction':
-    '{{skills}} 个技能 · {{mcp}} 个 MCP · {{instruction}} 份指令',
   'Let the agent auto-discover skills under .agents/skills and .pi/skills':
     '让 agent 自动发现 .agents/skills、.pi/skills 下的 skill',
   'Explore fold': '探后折叠',

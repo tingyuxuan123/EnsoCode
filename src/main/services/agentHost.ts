@@ -1044,7 +1044,7 @@ export function spawnSession(
   const preset = overlay?.preset ?? resolvePreset(request.presetId);
   const ownKit = resolvePresetPromptKit(preset);
   if (!ownKit.ok) {
-    return { ok: false, error: '自定义系统提示词正文读取失败，请重新保存或恢复默认。' };
+    return { ok: false, error: '无法读取此旧会话的预设提示词。你可以新建会话继续。' };
   }
   const promptKit = mergePresetPromptKit(ownKit, pluginPreset);
   const instruction = pluginPresetInstruction(pluginPreset?.instruction, () =>

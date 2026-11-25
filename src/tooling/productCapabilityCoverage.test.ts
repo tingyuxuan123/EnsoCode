@@ -66,7 +66,6 @@ describe('product capability coverage', () => {
       'skills',
       'mcp',
       'instructions',
-      'presets',
       'agent-types',
       'tools',
       'onboarding',
@@ -129,31 +128,6 @@ describe('product capability coverage', () => {
 
   it('会产生最小计费请求的连通性测试必须逐次 ASK', () => {
     expect(CAPABILITY_CATALOG['providers.test-connection'].risk).toBe('dangerous');
-  });
-
-  it('Preset create/edit schema 覆盖完整字段并拒绝缺必填、坏数组与额外字段', () => {
-    const createSchema = CAPABILITY_CATALOG['presets.create'].inputSchema;
-    const editSchema = CAPABILITY_CATALOG['presets.edit'].inputSchema;
-    expect(
-      matchesJsonSchema(createSchema, {
-        name: 'Review',
-        skillIds: ['skill-1'],
-        mcpServerIds: ['mcp-1'],
-        instructionId: 'instruction-1',
-      })
-    ).toBe(true);
-    expect(matchesJsonSchema(createSchema, { skillIds: [] })).toBe(false);
-    expect(matchesJsonSchema(createSchema, { name: 'Review', skillIds: [1] })).toBe(false);
-    expect(matchesJsonSchema(createSchema, { name: 'Review', unknown: true })).toBe(false);
-    expect(
-      matchesJsonSchema(editSchema, {
-        id: 'preset-1',
-        name: 'Updated',
-        skillIds: [],
-        mcpServerIds: ['mcp-1'],
-      })
-    ).toBe(true);
-    expect(matchesJsonSchema(editSchema, { name: 'Missing id' })).toBe(false);
   });
 
   it('Agent type create/edit schema 要求模型成对并拒绝未知 tools/额外字段', () => {

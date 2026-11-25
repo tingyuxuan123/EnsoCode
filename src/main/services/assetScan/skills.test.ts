@@ -140,7 +140,21 @@ describe('listProjectSkills', () => {
     const bundled = path.join(tmp, 'bundled');
     writeSkill(bundled, 'vetta-ui-design', 'name: vetta-ui-design\ndescription: Design canvas');
     expect(await listProjectSkills(cwd, { agentDir, additionalSkillPaths: [bundled] })).toEqual([
-      { name: 'vetta-ui-design', description: 'Design canvas' },
+      { name: 'vetta-ui-design', description: 'Design canvas', bundled: true },
+    ]);
+  });
+
+  it('does not mark a same-name project skill as bundled when it wins discovery', async () => {
+    const { cwd, agentDir } = setup();
+    const bundled = path.join(tmp, 'bundled');
+    writeSkill(bundled, 'vetta-ui-design', 'name: vetta-ui-design\ndescription: Bundled');
+    writeSkill(
+      path.join(cwd, '.agents', 'skills'),
+      'vetta-ui-design',
+      'name: vetta-ui-design\ndescription: Local'
+    );
+    expect(await listProjectSkills(cwd, { agentDir, additionalSkillPaths: [bundled] })).toEqual([
+      { name: 'vetta-ui-design', description: 'Local' },
     ]);
   });
 

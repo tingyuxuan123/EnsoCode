@@ -220,7 +220,6 @@ const STATIC_CATALOG: SettingsSearchEntry[] = [
     description: 'Chat body, headings, tables, code blocks and inline code font size and weight',
   },
   { id: 'providers.root', category: 'providers', title: 'Model Providers' },
-  { id: 'presets.root', category: 'presets', title: 'Presets' },
   { id: 'agents.root', category: 'agents', title: 'Agent types' },
   {
     id: 'agents.maxActiveCoworkers',

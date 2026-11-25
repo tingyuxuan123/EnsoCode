@@ -217,10 +217,6 @@ export const IPC_CHANNELS = {
   WORKFLOW_PRESETS_SAVE: 'workflow-presets:save',
   WORKFLOW_PRESETS_DELETE: 'workflow-presets:delete',
 
-  // Preset custom system prompt content (UUID-backed external files)
-  PRESETS_SYSTEM_PROMPT_READ: 'presets:system-prompt-read',
-  PRESETS_SYSTEM_PROMPT_WRITE: 'presets:system-prompt-write',
-
   // Agent sessions (Renderer → Main → utilityProcess)
   AGENT_SPAWN: 'agent:spawn',
   AGENT_PROMPT: 'agent:prompt',

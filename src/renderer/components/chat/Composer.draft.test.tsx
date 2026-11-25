@@ -79,14 +79,113 @@ const render = (
       />
     );
   });
-async function type(text: string) {
+async function type(text: string, placeCaret = false) {
   const editor = container.querySelector<HTMLElement>('[contenteditable]');
   if (!editor) throw new Error('Missing editor');
   await act(async () => {
     editor.textContent = text;
+    if (placeCaret && editor.firstChild) {
+      editor.focus();
+      window.getSelection()?.collapse(editor.firstChild, text.length);
+    }
     editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
 }
+
+describe('desktop slash command tray', () => {
+  const commands: NonNullable<ComponentProps<typeof Composer>['commands']> = [
+    { name: '/goal', description: 'Set a session goal' },
+    { name: '/skill:review', description: 'Review code' },
+    { name: '/skill:vetta-ui-design', description: 'Design canvas', bundled: true },
+  ];
+  const editor = () => container.querySelector<HTMLElement>('[role="combobox"]')!;
+  const panel = () => container.querySelector('[data-slot="composer-command-tray"]');
+  const key = (value: string) =>
+    act(async () => {
+      editor().dispatchEvent(
+        new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true })
+      );
+    });
+
+  it('shows built-ins first; pressing Enter keeps the same icon and sends nothing', async () => {
+    const onSend = vi.fn(() => true);
+    await render('draft-a', onSend, { commands });
+    await type('/', true);
+    const active = document.getElementById(editor().getAttribute('aria-activedescendant') ?? '');
+    const picture = active?.querySelector('img')?.getAttribute('src');
+    expect(active?.textContent).toContain('Vetta Design');
+    expect(picture).toBeTruthy();
+    await key('Enter');
+    expect(panel()).toBeNull();
+    const chip = container.querySelector('[data-slot="composer-command-chip"]');
+    expect(chip?.querySelector('img')?.getAttribute('src')).toBe(picture);
+    expect(chip?.textContent).toBe('Vetta Design');
+    expect(onSend).not.toHaveBeenCalled();
+    await type('Make a mockup', true);
+    await key('Enter');
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '/skill:vetta-ui-design Make a mockup' })
+    );
+  });
+
+  it('previews a toolbar action and fills plain text without running it', async () => {
+    const onSend = vi.fn(() => true);
+    await render('draft-a', onSend, { commands, commandPrompts: ['image'] });
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-composer-command-toggle]')?.click()
+    );
+    const action = [
+      ...(panel()?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []),
+    ].find((option) => option.textContent?.includes('Image generation'));
+    await act(async () => action?.click());
+    expect(panel()?.querySelector('[data-command-preview]')?.textContent).toContain(
+      'Image generation'
+    );
+    await key('Enter');
+    expect(panel()).toBeNull();
+    expect(editor().textContent).toContain('Generate an image');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('confirms a row with one click when the narrow tray hides its preview', async () => {
+    const onSend = vi.fn(() => true);
+    await render('draft-a', onSend, { commands, commandPrompts: ['image'] });
+    await type('/', true);
+    // happy-dom does not apply Tailwind container queries; exercise the hidden layout state.
+    const preview = panel()?.querySelector<HTMLElement>('[data-command-preview]');
+    expect(preview).not.toBeNull();
+    preview!.style.display = 'none';
+    const option = [
+      ...(panel()?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? []),
+    ].find((row) => row.textContent?.includes('Image generation'));
+    expect(option).toBeDefined();
+    await act(async () => option!.click());
+    expect(panel()).toBeNull();
+    expect(editor().textContent).toContain('Generate an image');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('allows Escape to dismiss the derived goal options', async () => {
+    await render('draft-a', undefined, { commands });
+    await type('/goal', true);
+    await key('Tab');
+    expect(panel()?.textContent).toContain('pause');
+    await key('Escape');
+    expect(panel()).toBeNull();
+    await type('res', true);
+    expect(panel()?.textContent).toContain('resume');
+  });
+
+  it('keeps the legacy picker on phones', async () => {
+    await render('draft-a', undefined, { commands, appearance: 'phone' });
+    await type('/', true);
+    expect(panel()).toBeNull();
+    expect(container.querySelector('[role="listbox"]')?.firstElementChild?.textContent).toContain(
+      '/goal'
+    );
+    expect(container.querySelector('[data-composer-command-toggle]')).toBeNull();
+  });
+});
 
 describe('Composer pending device access', () => {
   // The plugin/draft target can have a different key from the session requesting access.
@@ -322,7 +421,7 @@ describe('Composer draft lifecycle', () => {
     const onSend = vi.fn((_payload: ComposerPayload) => false);
     await render('draft-send', onSend);
     await type('/skill:a /skill:中文 任务 /skill:not-leading');
-    expect(container.querySelectorAll('[aria-label="Remove"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-slot="composer-command-chip"]')).toHaveLength(2);
     expect(container.querySelector('[contenteditable]')?.textContent).toBe(
       '任务 /skill:not-leading'
     );
@@ -346,7 +445,7 @@ describe('Composer draft lifecycle', () => {
         return false;
       });
       await render('draft-send', onSend);
-      expect(container.querySelectorAll('[aria-label="Remove"]')).toHaveLength(2);
+      expect(container.querySelectorAll('[data-slot="composer-command-chip"]')).toHaveLength(2);
       await act(async () =>
         container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.click()
       );
@@ -355,9 +454,9 @@ describe('Composer draft lifecycle', () => {
         '/skill:a /skill:b'
       );
       await act(async () =>
-        container.querySelector<HTMLButtonElement>('[aria-label="Remove"]')!.click()
+        container.querySelector<HTMLButtonElement>('[data-slot="composer-command-chip"]')!.click()
       );
-      expect(container.querySelectorAll('[aria-label="Remove"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[data-slot="composer-command-chip"]')).toHaveLength(1);
       await act(async () =>
         container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.click()
       );

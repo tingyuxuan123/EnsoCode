@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DefaultPackageManager, loadSkills } from '@earendil-works/pi-coding-agent';
+import type { ProjectSkillPreview } from '@shared/types/assets';
 import { parse as parseYaml } from 'yaml';
 import { resolveHarnessSkillRoots } from '../../../agent/harnessAssets';
 import { createProjectSettingsManager } from '../../../agent/projectCode';
@@ -74,7 +75,7 @@ export async function listProjectSkills(
     includeHarness?: boolean;
     additionalSkillPaths?: readonly string[];
   }
-): Promise<{ name: string; description: string }[]> {
+): Promise<ProjectSkillPreview[]> {
   const { agentDir } = options;
   const localSkillPaths: string[] = [];
   if (options.includeLocal !== false) {
@@ -96,6 +97,15 @@ export async function listProjectSkills(
     ...(options.includeHarness ? resolveHarnessSkillRoots(cwd) : []),
   ];
   return loadSkills({ cwd, agentDir, skillPaths, includeDefaults: false }).skills.map(
-    ({ name, description }) => ({ name, description })
+    ({ name, description, filePath }) => {
+      const bundled = options.additionalSkillPaths?.some((root) => {
+        const relative = path.relative(root, filePath);
+        return (
+          relative === '' ||
+          (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+        );
+      });
+      return { name, description, ...(bundled ? { bundled: true as const } : {}) };
+    }
   );
 }

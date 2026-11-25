@@ -5,7 +5,6 @@ import {
   FileText,
   Gauge,
   Keyboard,
-  Layers,
   Mic,
   Palette,
   Plug,
@@ -32,7 +31,6 @@ import { InstructionsSettings } from './InstructionsSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
 import { McpSettings } from './McpSettings';
 import { PluginsSettings } from './PluginsSettings';
-import { PresetsSettings } from './PresetsSettings';
 import { ProvidersSettings } from './ProvidersSettings';
 import { ResourcesSettings } from './ResourcesSettings';
 import { SkillsSettings } from './SkillsSettings';
@@ -89,7 +87,6 @@ export function SettingsContent() {
     { id: 'voice', icon: Mic, label: t('Voice input') },
     { id: 'appearance', icon: Palette, label: t('Appearance') },
     { id: 'providers', icon: Server, label: t('Model Providers') },
-    { id: 'presets', icon: Layers, label: t('Presets') },
     { id: 'agents', icon: Bot, label: t('Agent types') },
     { id: 'tools', icon: Wrench, label: t('Built-in tools') },
     { id: 'workflows', icon: Workflow, label: t('Workflows') },
@@ -103,9 +100,14 @@ export function SettingsContent() {
     { id: 'resources', icon: Gauge, label: t('Resources') },
   ];
   const categories = visibleCategories(allCategories, disabledBuiltinTools);
+  const knownCategories = allCategories.map((category) => category.id);
 
   // 当前页随功能开关隐藏时，落到能重新启用该功能的地方。
-  const resolvedCategory = resolveActiveCategory(activeCategory, disabledBuiltinTools);
+  const resolvedCategory = resolveActiveCategory(
+    activeCategory,
+    disabledBuiltinTools,
+    knownCategories
+  );
   React.useEffect(() => {
     if (resolvedCategory !== activeCategory) setActiveCategory(resolvedCategory);
   }, [resolvedCategory, activeCategory]);
@@ -151,7 +153,6 @@ export function SettingsContent() {
         {activeCategory === 'plugins' && <PluginsSettings />}
         {activeCategory === 'mcp' && <McpSettings />}
         {activeCategory === 'instructions' && <InstructionsSettings />}
-        {activeCategory === 'presets' && <PresetsSettings />}
         {activeCategory === 'agents' && <AgentTypesSettings />}
         {activeCategory === 'workflows' && <WorkflowsSettings />}
         {activeCategory === 'tools' && <BuiltinToolsSettings />}

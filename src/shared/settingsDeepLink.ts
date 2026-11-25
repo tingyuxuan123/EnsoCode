@@ -9,7 +9,6 @@ export const SETTINGS_CATEGORIES = [
   'plugins',
   'mcp',
   'instructions',
-  'presets',
   'agents',
   'workflows',
   'tools',

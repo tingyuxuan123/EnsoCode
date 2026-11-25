@@ -73,7 +73,6 @@ describe('persistent selection colour contract', () => {
 
   it.each([
     ['Sidebar.tsx', /active\s*\?\s*'([^']*bg-[^']+)'/],
-    ['PresetPicker.tsx', /selected\s*\?\s*'([^']+)'/],
     ['WorktreePicker.tsx', /option\.selected\s*\?\s*'([^']+)'/],
     ['ApprovalModePicker.tsx', /selected\s*\?\s*'([^']+)'/],
     ['PlanBar.tsx', /option === approvalMode\s*\?\s*'([^']+)'/],
@@ -95,7 +94,7 @@ describe('persistent selection colour contract', () => {
     expect(decls(generated, selector)['background-color']).toBe('var(--color-selection)');
   });
 
-  it.each(['ModelPicker.tsx', 'PresetPicker.tsx', 'WorktreePicker.tsx', 'WorkspaceBranchList.tsx'])(
+  it.each(['ModelPicker.tsx', 'WorktreePicker.tsx', 'WorkspaceBranchList.tsx'])(
     '%s selected check marks follow brand rather than neutral primary',
     async (file) => {
       const source = readFileSync(new URL(`../components/chat/${file}`, import.meta.url), 'utf8');

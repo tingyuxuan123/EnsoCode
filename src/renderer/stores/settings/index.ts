@@ -716,30 +716,6 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({ instructions: state.instructions.filter((i) => i.id !== id) }));
       },
 
-      addPreset: (preset) => {
-        const created = { ...preset, id: crypto.randomUUID() };
-        set((state) => ({ presets: [...state.presets, created] }));
-        return created;
-      },
-
-      updatePreset: (id, updates) => {
-        if (id === 'default') return;
-        set((state) => ({
-          presets: state.presets.map((p) => (p.id === id ? { ...p, ...updates } : p)),
-        }));
-      },
-
-      removePreset: (id) => {
-        if (id === 'default') return;
-        set((state) => ({
-          presets: state.presets.filter((p) => p.id !== id),
-          // 默认预设被删除时回落内置全局预设
-          ...(state.defaultPresetId === id ? { defaultPresetId: 'default' } : {}),
-        }));
-      },
-
-      setDefaultPresetId: (defaultPresetId) => set({ defaultPresetId }),
-
       setSubagentModelsEnabled: (subagentModelsEnabled) => set({ subagentModelsEnabled }),
 
       addSubagentModel: (entry) => {

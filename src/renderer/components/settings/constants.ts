@@ -11,7 +11,6 @@ export type SettingsCategory =
   | 'plugins'
   | 'mcp'
   | 'instructions'
-  | 'presets'
   | 'agents'
   | 'workflows'
   | 'tools'

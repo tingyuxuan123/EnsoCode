@@ -13,28 +13,10 @@ import { useSettingsStore } from '@/stores/settings';
 import { AgentTypeList } from '../settings/AgentTypesSettings';
 import { LocalAssetImportDialog } from '../settings/LocalAssetImportDialog';
 import { LocalImportDialog } from '../settings/LocalImportDialog';
-import { PresetEditDialog } from '../settings/PresetsSettings';
 import { ProviderSetupWizard } from '../settings/ProviderSetupWizard';
 
-type StepId =
-  | 'welcome'
-  | 'provider'
-  | 'skill'
-  | 'mcp'
-  | 'instruction'
-  | 'preset'
-  | 'agentType'
-  | 'done';
-const STEPS: StepId[] = [
-  'welcome',
-  'provider',
-  'skill',
-  'mcp',
-  'instruction',
-  'preset',
-  'agentType',
-  'done',
-];
+type StepId = 'welcome' | 'provider' | 'skill' | 'mcp' | 'instruction' | 'agentType' | 'done';
+const STEPS: StepId[] = ['welcome', 'provider', 'skill', 'mcp', 'instruction', 'agentType', 'done'];
 
 /** 首次运行引导：欢迎 → 四类导入 → 完成；每步可跳过，随时可关闭 */
 export function Onboarding() {
@@ -46,7 +28,6 @@ export function Onboarding() {
   const skills = useSettingsStore((s) => s.skills);
   const mcpServers = useSettingsStore((s) => s.mcpServers);
   const instructions = useSettingsStore((s) => s.instructions);
-  const presets = useSettingsStore((s) => s.presets);
   const defaultModel = useSettingsStore((s) => s.defaultModel);
   const oauthSnapshot = useOauthCredentialStore((s) => s.snapshot);
   // 「询问 Enso」会关掉引导并召唤 Enso，而 Enso 自己也要模型才能干活——
@@ -64,10 +45,9 @@ export function Onboarding() {
   const [importKind, setImportKind] = React.useState<'skill' | 'mcp' | 'instruction' | null>(null);
   const [providerOpen, setProviderOpen] = React.useState(false);
   const [setupOpen, setSetupOpen] = React.useState(false);
-  const [presetOpen, setPresetOpen] = React.useState(false);
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const nestedOpen = React.useRef(false);
-  nestedOpen.current = Boolean(importKind || providerOpen || setupOpen || presetOpen);
+  nestedOpen.current = Boolean(importKind || providerOpen || setupOpen);
   React.useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -239,24 +219,10 @@ export function Onboarding() {
             </div>
           )}
 
-          {step !== 'welcome' && step !== 'done' && step !== 'preset' && step !== 'agentType' && (
+          {step !== 'welcome' && step !== 'done' && step !== 'agentType' && (
             <ImportStepView
               {...importStep[step]}
               importedLabel={t('{{count}} imported', { count: importStep[step].count })}
-            />
-          )}
-
-          {step === 'preset' && (
-            <ImportStepView
-              icon={Layers}
-              title={t('Presets')}
-              desc={t(
-                'Bundle skills, MCP servers and an instruction file into a preset (optional)'
-              )}
-              count={presets.length}
-              onImport={() => setPresetOpen(true)}
-              importedLabel={t('{{count}} presets', { count: presets.length })}
-              importLabel={t('New preset')}
             />
           )}
 
@@ -340,7 +306,6 @@ export function Onboarding() {
           onOpenChange={(open) => !open && setImportKind(null)}
         />
       )}
-      {presetOpen && <PresetEditDialog preset={null} onClose={() => setPresetOpen(false)} />}
     </div>
   );
 }

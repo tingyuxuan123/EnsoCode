@@ -457,12 +457,6 @@ export interface SettingsState {
   updateInstruction: (id: string, updates: Partial<Omit<InstructionEntry, 'id'>>) => void;
   removeInstruction: (id: string) => void;
 
-  // Preset actions
-  addPreset: (preset: Omit<Preset, 'id'>) => Preset;
-  updatePreset: (id: string, updates: Partial<Omit<Preset, 'id'>>) => void;
-  removePreset: (id: string) => void;
-  setDefaultPresetId: (id: string) => void;
-
   // Subagent model actions
   setSubagentModelsEnabled: (value: boolean) => void;
   addSubagentModel: (entry: Omit<SubagentModelEntry, 'id'>) => SubagentModelEntry;

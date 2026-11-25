@@ -34,8 +34,11 @@ export function visibleCategories<T extends { id: SettingsCategory }>(
  */
 export function resolveActiveCategory(
   active: SettingsCategory,
-  disabledBuiltinTools: readonly string[]
+  disabledBuiltinTools: readonly string[],
+  known: readonly SettingsCategory[]
 ): SettingsCategory {
+  // 已退役分页（旧进程 / 热更新送来的 stale category）不在导航集合里，回落通用页
+  if (!known.includes(active)) return 'general';
   if (isCategoryVisible(active, disabledBuiltinTools)) return active;
   return 'tools';
 }

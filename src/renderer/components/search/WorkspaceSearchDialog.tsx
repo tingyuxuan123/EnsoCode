@@ -77,7 +77,6 @@ const SETTINGS_CATEGORY_LABELS: Record<SettingsCategory, string> = {
   plugins: 'Plugins',
   mcp: 'MCP Servers',
   instructions: 'Instruction Files',
-  presets: 'Presets',
   agents: 'Agent types',
   workflows: 'Workflows',
   tools: 'Built-in tools',

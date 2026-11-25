@@ -28,6 +28,7 @@ vi.mock('../services/agentHost', () => ({
 let projectRoot: string;
 const projectId = 'new-project';
 const design = { name: 'vetta-ui-design', description: 'Design canvas' };
+const bundledDesign = { ...design, bundled: true };
 
 beforeEach(() => {
   mocks.root = mkdtempSync(path.join(tmpdir(), 'enso-skill-preview-'));
@@ -63,12 +64,12 @@ async function preview(id: unknown = projectId): Promise<unknown> {
 }
 
 it('新项目未启动 worker 时就从内置资源返回设计技能', async () => {
-  expect(await preview()).toContainEqual(design);
+  expect(await preview()).toEqual([bundledDesign]);
 });
 
 it('项目本地技能扫描关闭后仍可发现设计技能；设计功能关闭后不再预览', async () => {
   mocks.settings.mockReturnValue({ loadLocalSkills: false });
-  expect(await preview()).toEqual([design]);
+  expect(await preview()).toEqual([bundledDesign]);
   mocks.settings.mockReturnValue({ loadLocalSkills: false, designEnabled: false });
   expect(await preview()).toEqual([]);
 });
@@ -99,5 +100,5 @@ it('临时会话只列内置技能，不扫描 scratch 共用父目录', async (
     state: 'active',
     version: 1,
   });
-  expect(await preview()).toEqual([design]);
+  expect(await preview()).toEqual([bundledDesign]);
 });

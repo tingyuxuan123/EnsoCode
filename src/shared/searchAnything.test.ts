@@ -213,7 +213,6 @@ describe('buildSettingsCatalog', () => {
     'shortcuts.root',
     'appearance.theme',
     'providers.root',
-    'presets.root',
     'agents.root',
     'agents.maxActiveCoworkers',
     'tools.root',
@@ -237,6 +236,12 @@ describe('buildSettingsCatalog', () => {
 
   it('设置搜索不再索引 LCU 开关', () => {
     expect(buildSettingsCatalog().map((entry) => entry.id)).not.toContain('tools.lcuEnabled');
+  });
+
+  it('已退役的会话预设页不再出现在设置搜索里', () => {
+    const catalog = buildSettingsCatalog();
+    expect(catalog.map((entry) => entry.id)).not.toContain('presets.root');
+    expect(catalog.some((entry) => entry.category === 'presets')).toBe(false);
   });
 
   it('不索引已移除的 Bot 设置', () => {

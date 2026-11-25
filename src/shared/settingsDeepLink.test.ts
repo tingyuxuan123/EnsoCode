@@ -47,7 +47,6 @@ describe('parseSettingsDeepLink', () => {
       'skills',
       'mcp',
       'instructions',
-      'presets',
       'agents',
       'tools',
       'phone',
@@ -59,6 +58,10 @@ describe('parseSettingsDeepLink', () => {
         rowId: `${category}.row`,
       });
     }
+  });
+
+  it('已退役的预设分类深链被拒绝，设置窗口回落到通用页', () => {
+    expect(parseSettingsDeepLink({ category: 'presets', rowId: 'presets.root' })).toBeNull();
   });
 
   it('非法分类返回 null', () => {

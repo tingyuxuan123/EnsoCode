@@ -35,7 +35,6 @@ import {
   effectiveDisabledBuiltinTools,
   MODEL_THINKING_LEVEL_OVERRIDES,
   type ModelProvider,
-  type Preset,
   type SshConnection,
 } from '@shared/types';
 import { persistedSettingsState } from '@shared/types/builtinTools';
@@ -187,7 +186,6 @@ function resultSettingField(capabilityId: string): string | null {
     'providers.subagent-models.add': 'subagentModels',
     'providers.subagent-models.update': 'subagentModels',
     'providers.subagent-models.remove': 'subagentModels',
-    'presets.set-default': 'defaultPresetId',
     'tools.toggle-builtin': 'disabledBuiltinTools',
     'agent-types.toggle-builtin': 'disabledBuiltinAgentTypes',
   };
@@ -503,51 +501,6 @@ function parseSubagentModelFields(
       ...(typeof existing?.enabled === 'boolean' ? { enabled: existing.enabled } : {}),
       ...(reasoning ? { reasoning } : {}),
       ...(thinkingLevel ? { thinkingLevel } : {}),
-    },
-  };
-}
-
-function parsePresetFields(
-  params: Record<string, unknown>,
-  state: Record<string, unknown>,
-  existing?: Record<string, unknown>
-): { ok: true; value: Omit<Preset, 'id'> } | CapabilityResult {
-  const name =
-    requiredString(params, 'name') ?? (typeof existing?.name === 'string' ? existing.name : null);
-  if (!name) return invalid('name is required');
-  const refs = referencedIds(params, state);
-  if (refs) return refs;
-  const skillIds = stringIds(params.skillIds ?? existing?.skillIds, 'skillIds');
-  if (!Array.isArray(skillIds)) return skillIds;
-  const mcpServerIds = stringIds(params.mcpServerIds ?? existing?.mcpServerIds, 'mcpServerIds');
-  if (!Array.isArray(mcpServerIds)) return mcpServerIds;
-  const instructionId =
-    typeof params.instructionId === 'string'
-      ? params.instructionId
-      : typeof existing?.instructionId === 'string'
-        ? existing.instructionId
-        : undefined;
-  const systemPromptId =
-    typeof existing?.systemPromptId === 'string' ? existing.systemPromptId : undefined;
-  const preserved: Partial<Preset> = {};
-  for (const key of [
-    'pluginPresetId',
-    'systemPromptTailId',
-    'boostPromptId',
-    'refusalRetryPromptId',
-  ] as const) {
-    if (typeof existing?.[key] === 'string') preserved[key] = existing[key];
-  }
-  if (typeof existing?.refusalRetry === 'boolean') preserved.refusalRetry = existing.refusalRetry;
-  return {
-    ok: true,
-    value: {
-      name,
-      skillIds,
-      mcpServerIds,
-      ...(instructionId ? { instructionId } : {}),
-      ...(systemPromptId ? { systemPromptId } : {}),
-      ...preserved,
     },
   };
 }
@@ -1118,59 +1071,6 @@ export function createCapabilityHandlers(
       if (stale) return stale;
       services.deleteInstruction(id);
       return updateArrayById(services, 'instructions', id, () => null, context.ownerWebContentsId);
-    },
-    'presets.list': () => success(settingsState(services.readSettings()).presets ?? []),
-    'presets.create': (context, params) => {
-      const parsed = parsePresetFields(params, settingsState(services.readSettings()));
-      if (!('value' in parsed)) return parsed;
-      const preset: Preset = { id: randomUUID(), ...parsed.value };
-      const current = settingsState(services.readSettings()).presets;
-      return patchResult(
-        services.patchSettings(
-          'presets',
-          [...(Array.isArray(current) ? current : []), preset],
-          context.ownerWebContentsId
-        ),
-        'presets'
-      );
-    },
-    'presets.edit': (context, params) => {
-      const id = requiredString(params, 'id');
-      if (!id) return invalid('id is required');
-      const current = settingsState(services.readSettings()).presets;
-      const existing = Array.isArray(current)
-        ? current.map(asRecord).find((entry) => entry?.id === id)
-        : undefined;
-      if (!existing) return unavailable(`presets entry not found: ${id}`);
-      const parsed = parsePresetFields(params, settingsState(services.readSettings()), existing);
-      if (!('value' in parsed)) return parsed;
-      return updateArrayById(
-        services,
-        'presets',
-        id,
-        () => ({ id, ...parsed.value }),
-        context.ownerWebContentsId
-      );
-    },
-    'presets.delete': (context, params) => {
-      const id = requiredString(params, 'id');
-      if (!id) return invalid('id is required');
-      const stale = context.assertExecutionCurrent();
-      if (stale) return stale;
-      return updateArrayById(services, 'presets', id, () => null, context.ownerWebContentsId);
-    },
-    'presets.set-default': (context, params) => {
-      const id = requiredString(params, 'id');
-      if (!id) return invalid('id is required');
-      const current = settingsState(services.readSettings()).presets;
-      const exists =
-        id === 'default' ||
-        (Array.isArray(current) && current.map(asRecord).some((entry) => entry?.id === id));
-      if (!exists) return unavailable(`presets entry not found: ${id}`);
-      return patchResult(
-        services.patchSettings('defaultPresetId', id, context.ownerWebContentsId),
-        'defaultPresetId'
-      );
     },
     'agent-types.list': () => success(services.sessionIndex.listAgentTypes()),
     'agent-types.create': (context, params) => {

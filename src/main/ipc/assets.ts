@@ -37,7 +37,6 @@ import {
 import { listMcpOccupancyTools } from '../services/mcpOccupancy';
 import { getMcpToolCatalog } from '../services/mcpToolCatalog';
 import { settingsSecrets } from '../services/settingsSecrets';
-import { readSystemPrompt, writeSystemPrompt } from '../services/systemPromptStore';
 import { getSourceAuthorityRegistry } from './agent';
 import { readSettings } from './settings';
 
@@ -200,21 +199,4 @@ export function registerAssetHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.INSTRUCTIONS_DELETE, (_event, id: unknown) => {
     if (typeof id === 'string') deleteInstruction(id);
   });
-
-  ipcMain.handle(IPC_CHANNELS.PRESETS_SYSTEM_PROMPT_READ, (_event, id: unknown) => {
-    if (id !== undefined && typeof id !== 'string') {
-      return { ok: false, content: '', error: 'Invalid id' };
-    }
-    return readSystemPrompt(id);
-  });
-
-  ipcMain.handle(
-    IPC_CHANNELS.PRESETS_SYSTEM_PROMPT_WRITE,
-    (_event, id: unknown, content: unknown) => {
-      if (typeof id !== 'string' || typeof content !== 'string') {
-        return { ok: false, error: 'Invalid arguments' };
-      }
-      return writeSystemPrompt(id, content);
-    }
-  );
 }

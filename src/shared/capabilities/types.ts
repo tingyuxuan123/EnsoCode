@@ -163,7 +163,8 @@ export interface CapabilityReceipt {
   child: ChildSessionIdentity;
   turnId: string;
   requestId: string;
-  capabilityId: ProductSurfaceId;
+  /** 历史 receipt 允许已退役 id；请求与发现仍只接受 ProductSurfaceId。 */
+  capabilityId: ReceiptCapabilityId;
   risk: CapabilityRisk;
   subject: CapabilitySubject;
   outcome: CapabilityOutcome;
@@ -249,6 +250,27 @@ const hasExactKeys = (value: Record<string, unknown>, keys: readonly string[]): 
   Object.keys(value).length === keys.length && hasOnlyKeys(value, keys);
 const isProductSurfaceId = (value: unknown): value is ProductSurfaceId =>
   typeof value === 'string' && Object.hasOwn(PRODUCT_SURFACE_INVENTORY, value);
+
+/**
+ * 已退役的产品面 id：只在历史 receipt 里继续可读，保证旧日志/旧自定义条目不被判坏。
+ * 请求（invoke/ASK）、发现（catalog list/describe）与执行都不接受这些 id。
+ */
+export const RETIRED_CAPABILITY_IDS = [
+  'presets.list',
+  'presets.create',
+  'presets.edit',
+  'presets.delete',
+  'presets.set-default',
+  'presets.select-for-conversation',
+] as const;
+
+export type RetiredCapabilityId = (typeof RETIRED_CAPABILITY_IDS)[number];
+
+/** receipt 专用的 id 联合：历史记录可含退役 id，新请求不可。 */
+export type ReceiptCapabilityId = ProductSurfaceId | RetiredCapabilityId;
+
+const isRetiredCapabilityId = (value: unknown): value is RetiredCapabilityId =>
+  typeof value === 'string' && (RETIRED_CAPABILITY_IDS as readonly string[]).includes(value);
 
 export function parseCapabilityResult(value: unknown): CapabilityResult | null {
   if (!isRecord(value) || typeof value.ok !== 'boolean') return null;
@@ -425,7 +447,8 @@ export function parseCapabilityReceipt(value: unknown): CapabilityReceipt | null
     !parseChildSessionIdentity(value.child) ||
     !isNonEmptyString(value.turnId) ||
     !isNonEmptyString(value.requestId) ||
-    !isProductSurfaceId(value.capabilityId) ||
+    // 历史 receipt 允许已退役 id；invoke/ASK 解析仍只认 ProductSurfaceId
+    (!isProductSurfaceId(value.capabilityId) && !isRetiredCapabilityId(value.capabilityId)) ||
     (value.risk !== 'read' && value.risk !== 'reversible' && value.risk !== 'dangerous') ||
     !parseCapabilitySubject(value.subject) ||
     !CAPABILITY_OUTCOMES.includes(value.outcome as CapabilityOutcome) ||

@@ -5,7 +5,6 @@ export type ProductSurfaceDomain =
   | 'skills'
   | 'mcp'
   | 'instructions'
-  | 'presets'
   | 'agent-types'
   | 'tools'
   | 'onboarding'
@@ -231,21 +230,6 @@ export const PRODUCT_SURFACE_INVENTORY = {
     domain: 'instructions',
     kind: 'action',
     label: 'Remove instruction registration',
-  },
-
-  'presets.list': { domain: 'presets', kind: 'action', label: 'List presets' },
-  'presets.create': { domain: 'presets', kind: 'setting', label: 'Create preset' },
-  'presets.edit': { domain: 'presets', kind: 'setting', label: 'Edit preset' },
-  'presets.delete': { domain: 'presets', kind: 'action', label: 'Delete preset' },
-  'presets.set-default': {
-    domain: 'presets',
-    kind: 'setting',
-    label: 'Set default preset for new conversations',
-  },
-  'presets.select-for-conversation': {
-    domain: 'presets',
-    kind: 'setting',
-    label: 'Select conversation preset',
   },
 
   'agent-types.list': { domain: 'agent-types', kind: 'action', label: 'List agent types' },

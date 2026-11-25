@@ -113,6 +113,7 @@ import type {
   PairQueueAction,
   PairSessionConfig,
   PairStatus,
+  ProjectSkillPreview,
   ProviderApiConfig,
   RecentProject,
   SaveFileCitationRequest,
@@ -528,7 +529,7 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.PLUGINS_LIST_INSTALLED),
     collectImport: (scanId: string, candidateIds: string[]): Promise<CollectedAsset[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.ASSETS_COLLECT_IMPORT, scanId, candidateIds),
-    listProjectSkills: (projectId: string): Promise<{ name: string; description: string }[]> =>
+    listProjectSkills: (projectId: string): Promise<ProjectSkillPreview[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.ASSETS_LIST_PROJECT_SKILLS, projectId),
     /** 按会话列出工作流预设；项目根由 Main 从会话记录推导 */
     listWorkflowPresets: (conversationId: string): Promise<WorkflowPresetSummary[]> =>
@@ -574,13 +575,6 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.WORKFLOW_PRESETS_SAVE, draft, id),
     delete: (id: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.WORKFLOW_PRESETS_DELETE, id),
-  },
-
-  presets: {
-    readSystemPrompt: (id?: string): Promise<{ ok: boolean; content: string; error?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PRESETS_SYSTEM_PROMPT_READ, id),
-    writeSystemPrompt: (id: string, content: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PRESETS_SYSTEM_PROMPT_WRITE, id, content),
   },
 
   dialog: {

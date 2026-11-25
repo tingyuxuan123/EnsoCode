@@ -21,6 +21,13 @@ export interface SkillEntry {
   enabled: boolean;
 }
 
+/** Redacted pre-spawn menu preview. Origin refers to the discovered file, not its name. */
+export interface ProjectSkillPreview {
+  name: string;
+  description: string;
+  bundled?: true;
+}
+
 export const MCP_TRANSPORTS = ['stdio', 'http', 'sse'] as const;
 export type McpTransport = (typeof MCP_TRANSPORTS)[number];
 

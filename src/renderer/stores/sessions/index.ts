@@ -33,6 +33,7 @@ import type {
   TurnDigest,
 } from '@shared/types/agent';
 import { STALE_SESSION_ERROR } from '@shared/types/agent';
+import { DEFAULT_PRESET_ID } from '@shared/types/assets';
 import type { AgentDispatchResult, AgentDispatchTask } from '@shared/types/mentions';
 import type { PairCreatedSession } from '@shared/types/pair';
 import type {
@@ -2608,7 +2609,9 @@ export const useSessionsStore = create<SessionsState>()(
                     conversation.archived !== true &&
                     !conversation.sessionFile &&
                     conversation.messages.length === 0 &&
-                    !conversation.title
+                    !conversation.title &&
+                    // 升级前已绑定显式预设的草稿保留原绑定，普通新建不隐式复用
+                    (!conversation.presetId || conversation.presetId === DEFAULT_PRESET_ID)
                   );
                 });
           if (existing) {
@@ -2653,11 +2656,9 @@ export const useSessionsStore = create<SessionsState>()(
             }
           }
           const pendingAgentPrefill = get().pendingAgentPrefill;
-          // 新会话应用默认预设；'default'（内置全局）或预设已删除时不写，spawn 时自然回落全局
+          // 新会话不再继承旧 defaultPresetId：普通会话按全局启用的 Skill/MCP/指令注入
           const settings = useSettingsStore.getState();
           const {
-            defaultPresetId,
-            presets,
             defaultReasoningEnabled,
             defaultThinkingLevel,
             approvalReviewer,
@@ -2673,10 +2674,6 @@ export const useSessionsStore = create<SessionsState>()(
             defaultReasoningEnabled,
             defaultThinkingLevel,
           });
-          const defaultPreset =
-            defaultPresetId !== 'default' && presets.some((preset) => preset.id === defaultPresetId)
-              ? { presetId: defaultPresetId }
-              : {};
           const conversation: Conversation = {
             ...emptyProjection,
             id,
@@ -2693,7 +2690,6 @@ export const useSessionsStore = create<SessionsState>()(
               oauthCredentialContext(useOauthCredentialStore.getState().snapshot),
               lastApprovalMode
             ),
-            ...defaultPreset,
             ...(worktree ? { worktree } : {}),
             ...(pendingAgentPrefill ? { prefillAgentTypeKey: pendingAgentPrefill } : {}),
             ...(options?.forkedFrom

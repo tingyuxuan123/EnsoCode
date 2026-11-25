@@ -148,6 +148,30 @@ describe('child capability transport', () => {
     expect(parseCapabilityExecutionEnvelope({ ...envelope, rawResult: 'secret' })).toBeNull();
   });
 
+  it('退役的会话预设能力只保留历史 receipt 解析，请求一律拒绝', () => {
+    const retired = { ...receipt, capabilityId: 'presets.set-default' };
+    expect(parseCapabilityReceipt(retired)).not.toBeNull();
+    expect(parseCapabilityReceipt({ ...retired, capabilityId: 'presets.removed' })).toBeNull();
+    expect(
+      parseCapabilityInvokeRequest({
+        child,
+        turnId: 'turn-1',
+        requestId: 'request-1',
+        capabilityId: 'presets.set-default',
+        params: { id: 'preset-1' },
+      })
+    ).toBeNull();
+    expect(
+      parseCapabilityAskRequest({
+        child,
+        turnId: 'turn-1',
+        requestId: 'request-1',
+        capabilityId: 'presets.delete',
+        summary: 'Delete preset',
+      })
+    ).toBeNull();
+  });
+
   it('receipt lifecycle 保持 danger lock 到真实 settled，并 exact 绑定 receipt', () => {
     const executing = {
       type: 'receipt-started',

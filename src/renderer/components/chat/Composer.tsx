@@ -6,7 +6,7 @@ import {
   pastedTextFileContent,
 } from '@shared/pastedText';
 import { filterSlashSubcommands, slashSubcommandQuery } from '@shared/slashSubcommands';
-import type { AttachedImage, SlashCommand } from '@shared/types/agent';
+import type { AttachedImage } from '@shared/types/agent';
 import type {
   AgentTypeMentionCandidate,
   ChatMentionCandidate,
@@ -50,6 +50,14 @@ import {
   pickPluginCandidate,
   usePluginTriggerCandidates,
 } from '../../plugins/triggers';
+import { ComposerCommandIcon } from './ComposerCommandIcon';
+import { ComposerCommandTray, commandLabel } from './ComposerCommandTray';
+import {
+  COMMAND_PROMPTS,
+  type ComposerCommand,
+  type ComposerCommandPrompt,
+  desktopComposerCommands,
+} from './composerCommands';
 import { composerDrafts as drafts } from './composerDraft';
 import {
   registerComposerFocus,
@@ -94,7 +102,8 @@ interface ComposerProps {
   /** Phone keeps the shared draft/command pipeline, with a separate round send action. */
   appearance?: 'default' | 'phone';
   cwd?: string;
-  commands: SlashCommand[];
+  commands: ComposerCommand[];
+  commandPrompts?: readonly ComposerCommandPrompt[];
   running: boolean;
   busy: boolean;
   focusKey?: string;
@@ -153,6 +162,7 @@ export function Composer({
   appearance = 'default',
   cwd,
   commands,
+  commandPrompts = [],
   running,
   busy,
   focusKey,
@@ -185,6 +195,7 @@ export function Composer({
   savePastedText,
 }: ComposerProps) {
   const { t } = useI18n();
+  const useCommandTray = appearance === 'default' && !isolated;
   const pendingAccess = usePendingDeviceAccess(deviceAccessSessionId);
   const locked = approvalLocked || pendingAccess;
   // Each unlocked interval belongs to one draft. Retained callbacks (file reads,
@@ -218,6 +229,7 @@ export function Composer({
   const sendBinding = effectiveKeybindings(keybindings)['send-message'];
   const voiceHoldBinding = effectiveKeybindings(keybindings)['voice-hold'];
   const mentionPickerId = useId();
+  const commandPickerId = useId();
   const [images, setImages] = useState<AttachedImage[]>([]);
   const [slash, setSlash] = useState<string | null>(null);
   const draftStateRef = useRef({ images, slash });
@@ -326,6 +338,9 @@ export function Composer({
   );
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [skillQuery, setSkillQuery] = useState<string | null>(null);
+  const [manualCommandDraft, setManualCommandDraft] = useState<string | null>(null);
+  const [subcommandsDismissed, setSubcommandsDismissed] = useState(false);
+  const [commandMaxHeight, setCommandMaxHeight] = useState<number>();
   const [pluginQuery, setPluginQuery] = useState<string | null>(null);
   const pluginItems = usePluginTriggerCandidates(isolated ? null : pluginQuery, focusKey ?? null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -402,6 +417,7 @@ export function Composer({
       setSlashQuery(state.slashQuery);
       setSkillQuery(state.skillQuery);
       setPluginQuery(state.pluginQuery);
+      setManualCommandDraft((snapshot) => (snapshot === state.plainText ? snapshot : null));
     },
     [onActivate, focusKey]
   );
@@ -437,6 +453,7 @@ export function Composer({
       setMentionQuery(null);
       setSlashQuery(null);
       setSkillQuery(null);
+      setManualCommandDraft(null);
       setActiveIndex(0);
       setOpenFolderId(null);
       setFolderIndex(0);
@@ -471,11 +488,21 @@ export function Composer({
 
   const subQuery = slashSubcommandQuery(slash, editorPlain.replaceAll('\uFFFC', ''));
   const pluginSlash = usePluginSlashCommands();
-  const slashResults = filterComposerCommands(
-    isolated ? commands : [...commands, ...pluginSlash],
-    slashQuery,
-    skillQuery
-  );
+  const commandQuery = skillQuery ?? slashQuery ?? (manualCommandDraft !== null ? '' : null);
+  const slashResults: ComposerCommand[] =
+    useCommandTray && commandQuery !== null
+      ? desktopComposerCommands(
+          [...commands, ...pluginSlash],
+          commandPrompts,
+          commandQuery,
+          skillQuery !== null,
+          (command) => commandLabel(command, t)
+        )
+      : filterComposerCommands(
+          isolated ? commands : [...commands, ...pluginSlash],
+          slashQuery,
+          skillQuery
+        );
   useEffect(() => {
     if (isolated) return;
     const onKey = (event: KeyboardEvent) => {
@@ -500,14 +527,19 @@ export function Composer({
     return () => window.removeEventListener('keydown', onKey);
   }, [isolated, busy, editBlocked, focusKey]);
   const subResults =
-    slashQuery === null && skillQuery === null && subQuery !== null
+    commandQuery === null && subQuery !== null && !subcommandsDismissed
       ? filterSlashSubcommands(slash, subQuery)
       : [];
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: changing the draft or session starts a fresh subcommand picker
+  useEffect(() => {
+    setSubcommandsDismissed(false);
+  }, [slash, subQuery, focusKey]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset highlight when the filter token changes
   useEffect(() => {
     setActiveIndex(0);
-  }, [slashQuery, skillQuery, subQuery, pluginQuery]);
+  }, [slashQuery, skillQuery, subQuery, pluginQuery, manualCommandDraft]);
 
   useEffect(() => {
     const item = slashListRef.current?.children[activeIndex] as HTMLElement | undefined;
@@ -558,15 +590,44 @@ export function Composer({
   );
 
   const popupKind =
-    mentionQuery !== null && mentionItems.length > 0
-      ? 'mention'
-      : pluginQuery !== null && pluginItems.length > 0
-        ? 'plugin'
-        : slashResults.length > 0
-          ? 'slash'
-          : subResults.length > 0
-            ? 'slash-sub'
-            : null;
+    locked && useCommandTray
+      ? null
+      : mentionQuery !== null && mentionItems.length > 0
+        ? 'mention'
+        : pluginQuery !== null && pluginItems.length > 0
+          ? 'plugin'
+          : slashResults.length > 0 || (useCommandTray && commandQuery !== null)
+            ? 'slash'
+            : subResults.length > 0
+              ? 'slash-sub'
+              : null;
+  const commandTrayOpen = useCommandTray && (popupKind === 'slash' || popupKind === 'slash-sub');
+
+  useLayoutEffect(() => {
+    if (!commandTrayOpen) return;
+    const composer = composerRef.current;
+    if (!composer) return;
+    const measure = () => {
+      const top = Math.floor(composer.getBoundingClientRect().top);
+      setCommandMaxHeight(top > 0 ? Math.max(64, top - 12) : undefined);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(composer);
+    if (composer.parentElement) observer.observe(composer.parentElement);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [commandTrayOpen]);
+
+  const closeCommandTray = () => {
+    setSlashQuery(null);
+    setSkillQuery(null);
+    setManualCommandDraft(null);
+    if (popupKind === 'slash-sub') setSubcommandsDismissed(true);
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 光标移动、picker 挂载、flyout 打开都要重测宽高
   useLayoutEffect(() => {
@@ -671,7 +732,7 @@ export function Composer({
   );
 
   const pickActive = useCallback(
-    (submitSubcommand = false) => {
+    (submitSubcommand = false, index = activeIndex) => {
       if (editBlocked()) return;
       if (popupKind === 'mention') {
         if (openFolderId) {
@@ -685,23 +746,34 @@ export function Composer({
         const item = pluginItems[activeIndex];
         if (item) pickPlugin(item);
       } else if (popupKind === 'slash') {
-        const item = slashResults[activeIndex];
+        const item = slashResults[index];
         if (!item) return;
+        const trigger = skillQuery !== null ? '$' : slashQuery !== null ? '/' : null;
+        if (item.prompt) {
+          if (trigger) editorRef.current?.consumeToken(trigger);
+          editorRef.current?.insertText(t(COMMAND_PROMPTS[item.prompt].template), true);
+          setSlashQuery(null);
+          setSkillQuery(null);
+          setManualCommandDraft(null);
+          return;
+        }
         const command = !isolated && pluginCommandFor(item.name);
         if (command) {
-          editorRef.current?.consumeToken('/');
+          if (trigger) editorRef.current?.consumeToken(trigger);
           setSlashQuery(null);
+          setManualCommandDraft(null);
           void runPluginCommand(command, focusKey ?? null).then((error) => {
             if (error) addToast({ title: error });
           });
           return;
         }
-        editorRef.current?.consumeToken(skillQuery !== null ? '$' : '/');
+        if (trigger) editorRef.current?.consumeToken(trigger);
         setSlashQuery(null);
         setSkillQuery(null);
+        setManualCommandDraft(null);
         setSlash((current) => appendSlash(current, item.name));
       } else if (popupKind === 'slash-sub') {
-        const item = subResults[activeIndex];
+        const item = subResults[index];
         if (!item) return;
         applySlashSubcommand(item.name, submitSubcommand);
       }
@@ -717,12 +789,14 @@ export function Composer({
       pluginItems,
       popupKind,
       slashResults,
+      slashQuery,
       skillQuery,
       subResults,
       applySlashSubcommand,
       editBlocked,
       focusKey,
       isolated,
+      t,
     ]
   );
 
@@ -805,13 +879,20 @@ export function Composer({
       event.preventDefault();
       return;
     }
+    if (commandTrayOpen && !isComposing && event.key === 'Escape') {
+      event.preventDefault();
+      closeCommandTray();
+      return;
+    }
     if (popupKind) {
       const activeItem = popupKind === 'mention' ? mentionItems[activeIndex] : undefined;
       const action = resolvePopupKeyAction({
         key: event.key,
         shiftKey: event.shiftKey,
         isComposing,
-        activeIndex,
+        activeIndex: commandTrayOpen
+          ? Math.min(activeIndex, Math.max(0, popupLength - 1))
+          : activeIndex,
         itemCount: popupLength,
         folderOpen: popupKind === 'mention' && openFolderId !== null,
         activeIsFolder: popupKind === 'mention' && activeItem?.type === 'folder',
@@ -842,7 +923,10 @@ export function Composer({
       }
       if (action.type === 'pick') {
         event.preventDefault();
-        pickActive(popupKind === 'slash-sub' && event.key === 'Enter');
+        pickActive(
+          popupKind === 'slash-sub' && event.key === 'Enter',
+          commandTrayOpen ? Math.min(activeIndex, popupLength - 1) : activeIndex
+        );
         return;
       }
       if (action.type === 'close') {
@@ -889,7 +973,15 @@ export function Composer({
   };
 
   return (
-    <div ref={composerRef} data-enso="composer" className="relative">
+    <div
+      ref={composerRef}
+      data-enso="composer"
+      className="relative"
+      onBlur={(event) => {
+        if (commandTrayOpen && !event.currentTarget.contains(event.relatedTarget))
+          closeCommandTray();
+      }}
+    >
       {popupKind === 'mention' && (
         <MentionPicker
           id={mentionPickerId}
@@ -937,7 +1029,20 @@ export function Composer({
           ))}
         </div>
       )}
-      {(popupKind === 'slash' || popupKind === 'slash-sub') && (
+      {commandTrayOpen && (
+        <ComposerCommandTray
+          id={commandPickerId}
+          items={popupKind === 'slash-sub' ? subResults : slashResults}
+          activeIndex={Math.min(activeIndex, popupLength - 1)}
+          maxHeight={commandMaxHeight}
+          skillOnly={skillQuery !== null}
+          parentCommand={popupKind === 'slash-sub' ? slash : null}
+          onPreview={setActiveIndex}
+          onConfirm={(index) => pickActive(false, index)}
+          onClose={closeCommandTray}
+        />
+      )}
+      {!useCommandTray && (popupKind === 'slash' || popupKind === 'slash-sub') && (
         <div
           ref={slashListRef}
           role="listbox"
@@ -988,7 +1093,9 @@ export function Composer({
           'rounded-xl border border-border bg-card shadow-xs transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-smooth-out)] hover:border-foreground/15 focus-within:border-brand/60 focus-within:shadow-sm',
           locked && 'border-line opacity-80',
           (dragging || dndOver) && 'border-brand/50 bg-brand/5',
-          (agentRecipient || planMode) && 'border-brand/35 shadow-brand/5'
+          (agentRecipient || planMode) && 'border-brand/35 shadow-brand/5',
+          commandTrayOpen &&
+            'rounded-t-none border-t-transparent hover:border-t-transparent focus-within:border-t-transparent'
         )}
         onDragOver={(event) => {
           if (event.dataTransfer.types.includes('Files')) {
@@ -1064,26 +1171,62 @@ export function Composer({
           {recipient && (
             <MentionChip recipient={recipient} onRemove={() => setRecipient(undefined)} />
           )}
-          {slashChain(slash).map((name, index) => (
-            <SlashChip
-              // biome-ignore lint/suspicious/noArrayIndexKey: Identical command tokens can repeat in legacy drafts; their ordered occurrence is their identity.
-              key={`${index}-${name}`}
-              name={name}
-              className="mt-0.5 shrink-0"
-              trailing={
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSlash((current) => (current ? removeSlash(current, index) : null))
-                  }
-                  className="rounded-sm opacity-70 hover:opacity-100"
-                  aria-label={t('Remove')}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              }
-            />
-          ))}
+          {slashChain(slash).map((name, index) => {
+            const command = commands.find((item) => item.name === name) ?? {
+              name,
+              description: '',
+            };
+            const remove = () => {
+              if (editBlocked()) return;
+              setSlash((current) => (current ? removeSlash(current, index) : null));
+              editorRef.current?.focus();
+            };
+            return useCommandTray ? (
+              <button
+                // biome-ignore lint/suspicious/noArrayIndexKey: repeated tokens in legacy drafts use ordered identity.
+                key={`${index}-${name}`}
+                data-slot="composer-command-chip"
+                type="button"
+                aria-label={t('Remove {{name}}', { name: commandLabel(command, t) })}
+                disabled={locked}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={remove}
+                className="group/chip mt-0.5 inline-flex min-h-[calc(29rem/14)] max-w-[46%] shrink-0 items-center gap-1.5 rounded-lg border border-selection-border bg-selection px-2.5 text-sm font-semibold text-foreground hover:border-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="relative grid shrink-0 place-items-center">
+                  <span className="grid place-items-center group-hover/chip:opacity-0 group-focus-visible/chip:opacity-0">
+                    <ComposerCommandIcon command={command} />
+                  </span>
+                  <X
+                    aria-hidden="true"
+                    className="absolute size-3.5 text-muted-foreground opacity-0 group-hover/chip:opacity-100 group-focus-visible/chip:opacity-100"
+                  />
+                </span>
+                <span className="truncate">
+                  {name.startsWith('/skill:') ? commandLabel(command, t) : name}
+                </span>
+              </button>
+            ) : (
+              <SlashChip
+                // biome-ignore lint/suspicious/noArrayIndexKey: Identical command tokens can repeat in legacy drafts; their ordered occurrence is their identity.
+                key={`${index}-${name}`}
+                name={name}
+                className="mt-0.5 shrink-0"
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSlash((current) => (current ? removeSlash(current, index) : null))
+                    }
+                    className="rounded-sm opacity-70 hover:opacity-100"
+                    aria-label={t('Remove')}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                }
+              />
+            );
+          })}
           <MentionEditor
             ref={editorRef}
             className="text-[length:var(--composer-font-size,1rem)] leading-[calc(24rem/14)]"
@@ -1150,13 +1293,20 @@ export function Composer({
               role: 'combobox',
               'aria-autocomplete': 'list',
               'aria-expanded': popupKind !== null,
-              'aria-controls': popupKind === 'mention' ? mentionPickerId : undefined,
+              'aria-controls':
+                popupKind === 'mention'
+                  ? mentionPickerId
+                  : commandTrayOpen
+                    ? commandPickerId
+                    : undefined,
               'aria-activedescendant':
                 popupKind === 'mention'
                   ? openFolderId
                     ? `${mentionPickerId}-sub-${folderIndex}`
                     : `${mentionPickerId}-option-${activeIndex}`
-                  : undefined,
+                  : commandTrayOpen && popupLength
+                    ? `${commandPickerId}-${Math.min(activeIndex, popupLength - 1)}`
+                    : undefined,
             }}
           />
         </div>
@@ -1195,6 +1345,35 @@ export function Composer({
                 <ImagePlus className="size-[calc(14rem/14)]" />
               )}
             </button>
+            {useCommandTray &&
+              (commands.length > 0 || commandPrompts.length > 0 || pluginSlash.length > 0) && (
+                <button
+                  type="button"
+                  data-composer-command-toggle=""
+                  aria-label={t('Commands and skills')}
+                  aria-expanded={commandTrayOpen}
+                  aria-controls={commandTrayOpen ? commandPickerId : undefined}
+                  title={t('Commands and skills')}
+                  disabled={locked || sending}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    if (editBlocked()) return;
+                    if (commandTrayOpen) closeCommandTray();
+                    else {
+                      setMentionQuery(null);
+                      setPluginQuery(null);
+                      setManualCommandDraft(editorPlain);
+                    }
+                    editorRef.current?.focus();
+                  }}
+                  className={cn(
+                    'flex size-[calc(28rem/14)] shrink-0 items-center justify-center rounded-[6px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40',
+                    commandTrayOpen && 'bg-selection text-selection-foreground'
+                  )}
+                >
+                  <SlashSquare aria-hidden="true" className="size-[calc(15rem/14)]" />
+                </button>
+              )}
             <span data-composer-voice="" className="contents">
               {holdVoice ? (
                 <HoldToTalkToggle
@@ -1263,17 +1442,31 @@ export function Composer({
               size="icon"
               data-composer-action-button="send"
               className="size-[calc(32rem/14)] shrink-0 rounded-[6px] border-brand bg-brand text-brand-foreground shadow-none hover:bg-brand/90 disabled:opacity-35"
-              onClick={handleSend}
-              disabled={!hasContent || locked || sending}
-              aria-label={agentRecipient ? t('Send only to the selected Agent') : t('Send')}
-              title={
-                agentRecipient
-                  ? t('Send only to the selected Agent')
-                  : enterToSend
-                    ? sendBinding
-                      ? `${t('Send')} ${formatBinding(sendBinding)}`
-                      : t('Send')
+              onMouseDown={(event) => {
+                if (commandTrayOpen) event.preventDefault();
+              }}
+              onClick={() => {
+                if (commandTrayOpen) pickActive(false, Math.min(activeIndex, popupLength - 1));
+                else void handleSend();
+              }}
+              disabled={(commandTrayOpen ? popupLength === 0 : !hasContent) || locked || sending}
+              aria-label={
+                commandTrayOpen
+                  ? t('Insert command')
+                  : agentRecipient
+                    ? t('Send only to the selected Agent')
                     : t('Send')
+              }
+              title={
+                commandTrayOpen
+                  ? t('Insert command')
+                  : agentRecipient
+                    ? t('Send only to the selected Agent')
+                    : enterToSend
+                      ? sendBinding
+                        ? `${t('Send')} ${formatBinding(sendBinding)}`
+                        : t('Send')
+                      : t('Send')
               }
             >
               <ArrowUp className="size-[calc(16rem/14)]" />

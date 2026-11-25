@@ -8,6 +8,7 @@ import { conversationDotTone } from '@shared/conversationDotTone';
 import { resolveChatModel, scopedDefaultModels } from '@shared/defaultModel';
 import { planPhase } from '@shared/planMode';
 import { projectDisplayName } from '@shared/projectName';
+import type { ProjectSkillPreview } from '@shared/types/assets';
 import { isBuiltinToolEnabledForProject } from '@shared/types/builtinTools';
 import type { AgentTypeMentionCandidate } from '@shared/types/mentions';
 import { isVirtualRef, modelDisplayName } from '@shared/virtualModels';
@@ -43,6 +44,7 @@ import { CollapsingToolbar } from './CollapsingToolbar';
 import { Composer } from './Composer';
 import { ConversationStatusIndicator } from './ConversationStatusIndicator';
 import { CoworkerTabs } from './CoworkerTabs';
+import type { ComposerCommandPrompt } from './composerCommands';
 import { insertComposerText, requestFocusComposer } from './composerMentionBridge';
 import { routeComposerPayload } from './composerRouting';
 import { GoalBar } from './GoalBar';
@@ -53,7 +55,6 @@ import { ModelPicker } from './ModelPicker';
 import type { ChatMentionMeta } from './mentionPickerDisplay';
 import { PlanBar } from './PlanBar';
 import { PlanModeToggle } from './PlanModeToggle';
-import { PresetPicker } from './PresetPicker';
 import { ProjectCodeTrustBar } from './ProjectCodeTrustBar';
 import { RetryBar } from './RetryBar';
 import { StatsLine } from './StatsLine';
@@ -246,9 +247,17 @@ export function ChatView() {
       'plan'
     )
   );
+  const imagePromptEnabled = useSettingsStore((state) =>
+    isBuiltinToolEnabledForProject(
+      state.disabledBuiltinTools,
+      state.projects,
+      chrome?.projectId,
+      'image_generation'
+    )
+  );
   const [skillPreview, setSkillPreview] = useState<{
     projectId: string;
-    skills: { name: string; description: string }[];
+    skills: ProjectSkillPreview[];
   }>();
   const projectId = project?.id;
   const projectKind = project?.kind;
@@ -294,6 +303,7 @@ export function ChatView() {
     const fromProject = preview.map((skill) => ({
       name: `/skill:${skill.name}`,
       description: skill.description,
+      bundled: designEnabled ? skill.bundled : undefined,
     }));
     // 设置里登记的同名技能优先；项目扫描和会话命令里的副本不再各占一行
     return dedupeSlashCommands([
@@ -304,7 +314,20 @@ export function ChatView() {
       ...fromProject,
       ...chromeCommands,
     ]);
-  }, [t, skills, skillPreview, projectId, chromeCommands, planAvailable]);
+  }, [t, skills, skillPreview, projectId, chromeCommands, planAvailable, designEnabled]);
+
+  const commandPrompts: ComposerCommandPrompt[] = [];
+  if (chrome && !chrome.displayedParentId) {
+    if (imagePromptEnabled) commandPrompts.push('image');
+    if (
+      project?.path &&
+      (!project.kind || project.kind === 'local') &&
+      !chrome.parentWorktreeMissing &&
+      typeof window.electronAPI.extensionPlugins?.createAuthoringDraft === 'function'
+    ) {
+      commandPrompts.push('plugin');
+    }
+  }
 
   const timelineRef = useRef<MessageTimelineHandle>(null);
   const planning =
@@ -526,6 +549,7 @@ export function ChatView() {
             chatCandidates={chatCandidates}
             chatMeta={chatMeta}
             commands={slashCommands}
+            commandPrompts={commandPrompts}
             running={running}
             busy={busy}
             deviceAccessSessionId={chrome.id}
@@ -568,28 +592,9 @@ export function ChatView() {
               <>
                 {!chrome.displayedParentId && (
                   <>
-                    {/* 放不下时按 rank 逐个收成图标，再逐个收进「…」：预设 → 审批 → 工作区 → 计划 */}
+                    {/* 放不下时按 rank 逐个收成图标，再逐个收进「…」：审批 → 工作区 → 计划 */}
                     <CollapsingToolbar
                       items={[
-                        {
-                          id: 'preset',
-                          rank: 0,
-                          render: (compact) => (
-                            <PresetPicker
-                              compact={compact}
-                              presetId={chrome.presetId ?? 'default'}
-                              disabled={chrome.started}
-                              onSelect={(presetId) =>
-                                useSessionsStore.getState().setPreset(chrome.id, presetId)
-                              }
-                              onModel={(model) =>
-                                useSessionsStore
-                                  .getState()
-                                  .setModel(chrome.id, model.providerId, model.modelId)
-                              }
-                            />
-                          ),
-                        },
                         {
                           id: 'worktree',
                           rank: 2,

@@ -37,8 +37,8 @@ import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
 import { useMaterializedProviders } from '@/stores/modelDirectory/useProviders';
 import { useSettingsStore } from '@/stores/settings';
+import { DetailRows, PickList, setFilteredIds } from './AssetPickList';
 import { NewSessionBadge } from './NewSessionBadge';
-import { DetailRows, PickList, setFilteredIds } from './PresetsSettings';
 
 export function AgentTypesSettings() {
   const { t } = useI18n();
