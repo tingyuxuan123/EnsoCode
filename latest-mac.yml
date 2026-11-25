@@ -1,47 +1,55 @@
-version: 0.2.103
+version: 0.2.105
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.103/CodeKiln-0.2.103-arm64-mac.zip
-    sha512: ftygZeCxHR8wshTZrFaqJC8TBMs/paXX2m6cssfHyLO/XUEi8iBtPEd+XW8zp+zu0Du79p+3elVQVBSKG2KE1g==
-    size: 191465636
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.103/CodeKiln-0.2.103-arm64.dmg
-    sha512: kzIeDZtFMcIPcfxX17oAdgCouj+E4uk3trxbL3j0ex++xS2JiuttAYN7qgRyavR3GO/jR+pZ46MN/Hdu5cUTfA==
-    size: 187492281
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.103/CodeKiln-0.2.103-arm64-mac.zip
-sha512: ftygZeCxHR8wshTZrFaqJC8TBMs/paXX2m6cssfHyLO/XUEi8iBtPEd+XW8zp+zu0Du79p+3elVQVBSKG2KE1g==
-releaseDate: 2026-11-24T05:59:35.206Z
-releaseName: CodeKiln 0.2.103 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.105/CodeKiln-0.2.105-arm64-mac.zip
+    sha512: pMemFgm1TKSf2lRMnOzcXXN5G35IwpyE0JedsPr/1E/+eGFw6yGnNuhqVlV5K3md74keI0vthdmu6GZ8cDmjyA==
+    size: 191192739
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.105/CodeKiln-0.2.105-arm64.dmg
+    sha512: dqDGUTYCBu2l+vpqpawPxsGJvRf4s/UCMpvr7UB57e1OwDeIex46m0HTUJw6iJ0vBPpCV16Hh9IZGJAB34ZQ6w==
+    size: 187211417
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.105/CodeKiln-0.2.105-arm64-mac.zip
+sha512: pMemFgm1TKSf2lRMnOzcXXN5G35IwpyE0JedsPr/1E/+eGFw6yGnNuhqVlV5K3md74keI0vthdmu6GZ8cDmjyA==
+releaseDate: 2026-11-25T02:57:55.383Z
+releaseName: CodeKiln 0.2.105 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.103
+  # CodeKiln 0.2.105
 
 
-  ## 记忆与知识
+  ## 输入框与命令
 
 
-  - 移除旧的本地记忆与 Wiki 记忆子系统，包括记忆工具、记忆桥接、清理任务和对应设置项；升级时自动清理遗留设置键与已停用的记忆工具开关。
+  - 输入框的斜杠命令改为分组托盘：系统内置、会话命令、项目技能分开显示，可继续输入筛选，直接填入命令或提示词。
 
-  - 新增 llmdoc 知识地图插件（示例插件）：只读浏览、检索和复核当前 Git 项目里的 `llmdoc/` 知识文档，Git 诊断限定在当前工作树内。
+  - 新增 `/image` 与 `/plugin` 两个内置入口，分别引导生成图片和制作 CodeKiln 插件。
 
-  - 随仓库补充 `llmdoc/` 知识文档目录，覆盖发布流程与会话投影等主题。
-
-
-  ## 文档与工程
+  - 移除旧的预设（preset）体系，包括设置页、能力目录与提示词相关选项；遗留预设不再影响新会话。
 
 
-  - 更新 README 的功能说明、工作台截图与数据目录细节。
+  ## 扩展与插件
 
-  - 测试脚本纳入 llmdoc 插件测试，忽略其本机缓存目录。
+
+  - 扩展页改版：新增插件制作入口、插件市场来源刷新，以及示例插件的图文说明页。
+
+  - 插件制作：在本地 Code 会话中生成插件草稿，先审阅文件与权限，再安装本地副本；草稿与工作区绑定，切换工作区后需重新打开入口。
+
+  - 新增「权限与数据访问」页，按声明的宿主 API 权限分类展示已安装插件与更新候选的风险项。
+
+  - 项目知识地图示例插件支持从改动源码反查需要复核的文档，并保持只读检查。
+
+
+  ## 设计
+
+
+  - 设计系统详情页展示作者信息，网格页改为悬停/聚焦时按需加载演示预览与封面缓存。
 
 
   ## 其他
 
 
-  - 修复图片设置里模型下拉选项显示不全的问题。
-
-  - 图片工坊支持选择和复制对话中的提示词。
+  - 清理仓库内已废弃的设计稿工程与无用依赖。
 
 
   ---
 
 
-  个人测试通道 0.2.103：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.105：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
