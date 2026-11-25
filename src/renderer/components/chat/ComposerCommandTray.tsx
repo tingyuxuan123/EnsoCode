@@ -97,7 +97,7 @@ export function ComposerCommandTray({
       aria-label={label}
       data-slot="composer-command-tray"
       style={maxHeight ? { maxHeight: `min(${maxHeight}px, 488px, 58vh)` } : undefined}
-      className="@container absolute inset-x-0 bottom-[calc(100%-1px)] z-10 flex h-[calc(320rem/14)] max-h-[min(488px,58vh)] min-w-0 flex-col overflow-hidden rounded-t-xl border border-b-0 border-brand/60 bg-card text-card-foreground shadow-float"
+      className="@container absolute inset-x-0 bottom-[calc(100%+6px)] z-10 flex h-[calc(320rem/14)] max-h-[min(488px,58vh)] min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-float"
     >
       {/* 头部：不画分隔线，靠留白分层 */}
       <header className="flex h-[calc(42rem/14)] shrink-0 items-center justify-between gap-3 px-4">

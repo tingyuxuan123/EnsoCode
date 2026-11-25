@@ -1093,9 +1093,7 @@ export function Composer({
           'rounded-xl border border-border bg-card shadow-xs transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-smooth-out)] hover:border-foreground/15 focus-within:border-brand/60 focus-within:shadow-sm',
           locked && 'border-line opacity-80',
           (dragging || dndOver) && 'border-brand/50 bg-brand/5',
-          (agentRecipient || planMode) && 'border-brand/35 shadow-brand/5',
-          commandTrayOpen &&
-            'rounded-t-none border-t-transparent hover:border-t-transparent focus-within:border-t-transparent'
+          (agentRecipient || planMode) && 'border-brand/35 shadow-brand/5'
         )}
         onDragOver={(event) => {
           if (event.dataTransfer.types.includes('Files')) {
