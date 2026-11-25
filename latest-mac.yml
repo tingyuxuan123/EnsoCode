@@ -1,55 +1,35 @@
-version: 0.2.105
+version: 0.2.106
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.105/CodeKiln-0.2.105-arm64-mac.zip
-    sha512: pMemFgm1TKSf2lRMnOzcXXN5G35IwpyE0JedsPr/1E/+eGFw6yGnNuhqVlV5K3md74keI0vthdmu6GZ8cDmjyA==
-    size: 191192739
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.105/CodeKiln-0.2.105-arm64.dmg
-    sha512: dqDGUTYCBu2l+vpqpawPxsGJvRf4s/UCMpvr7UB57e1OwDeIex46m0HTUJw6iJ0vBPpCV16Hh9IZGJAB34ZQ6w==
-    size: 187211417
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.105/CodeKiln-0.2.105-arm64-mac.zip
-sha512: pMemFgm1TKSf2lRMnOzcXXN5G35IwpyE0JedsPr/1E/+eGFw6yGnNuhqVlV5K3md74keI0vthdmu6GZ8cDmjyA==
-releaseDate: 2026-11-25T02:57:55.383Z
-releaseName: CodeKiln 0.2.105 — 个人测试
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.106/CodeKiln-0.2.106-arm64-mac.zip
+    sha512: yxR+OldD7xbOdR8/kgL3w3DfVTzJF1cOc61EKjTHBdjDwDs+q7P7gbojIekmJP3UOMyTsg3IZxGOgn8n2Ob5ow==
+    size: 191192176
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.106/CodeKiln-0.2.106-arm64.dmg
+    sha512: eBpmB/M3XJAqgL7T7KJ5bgTjF0cs1+y9kUwpzqeqvqk8BDX5PACyK1hS18xHLI6qKCAOcO5xImYJZCQb7OGfAg==
+    size: 187214170
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.106/CodeKiln-0.2.106-arm64-mac.zip
+sha512: yxR+OldD7xbOdR8/kgL3w3DfVTzJF1cOc61EKjTHBdjDwDs+q7P7gbojIekmJP3UOMyTsg3IZxGOgn8n2Ob5ow==
+releaseDate: 2026-11-25T04:03:17.200Z
+releaseName: CodeKiln 0.2.106 — 个人测试
 releaseNotes: >
-  # CodeKiln 0.2.105
+  # CodeKiln 0.2.106
 
 
-  ## 输入框与命令
+  ## 设计画布
 
 
-  - 输入框的斜杠命令改为分组托盘：系统内置、会话命令、项目技能分开显示，可继续输入筛选，直接填入命令或提示词。
+  - 选中 Vetta Design 技能后，界面改版默认先在独立的 `.vetd` 画布中出稿，现有应用或插件源码仅作为参考；只有明确要求实现时才修改源码。
 
-  - 新增 `/image` 与 `/plugin` 两个内置入口，分别引导生成图片和制作 CodeKiln 插件。
-
-  - 移除旧的预设（preset）体系，包括设置页、能力目录与提示词相关选项；遗留预设不再影响新会话。
+  - 画布不可用时报告原因，不自动改源码或改用独立 HTML 稿；绘制图片、插画或壁纸仍走生图工具。
 
 
-  ## 扩展与插件
+  ## 文档
 
 
-  - 扩展页改版：新增插件制作入口、插件市场来源刷新，以及示例插件的图文说明页。
-
-  - 插件制作：在本地 Code 会话中生成插件草稿，先审阅文件与权限，再安装本地副本；草稿与工作区绑定，切换工作区后需重新打开入口。
-
-  - 新增「权限与数据访问」页，按声明的宿主 API 权限分类展示已安装插件与更新候选的风险项。
-
-  - 项目知识地图示例插件支持从改动源码反查需要复核的文档，并保持只读检查。
-
-
-  ## 设计
-
-
-  - 设计系统详情页展示作者信息，网格页改为悬停/聚焦时按需加载演示预览与封面缓存。
-
-
-  ## 其他
-
-
-  - 清理仓库内已废弃的设计稿工程与无用依赖。
+  - 中英文 README 补充 Open Vetta 致谢，注明设计子系统和部分生图能力的来源及许可。
 
 
   ---
 
 
-  个人测试通道 0.2.105：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
+  个人测试通道 0.2.106：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
   使用。不是正式发布（latest），未公证。安装与重启由用户操作。
