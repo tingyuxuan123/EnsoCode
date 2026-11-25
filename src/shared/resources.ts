@@ -250,14 +250,19 @@ export interface ChromiumPidKinds {
 }
 
 export const AGENT_SERVICE_NAME = 'enso-agent-worker';
+export const AGENT_SERVICE_ATTEMPT_PREFIX = `${AGENT_SERVICE_NAME}:`;
+
+export function isAgentWorkerMetric(metric: { serviceName?: string; name?: string }): boolean {
+  return [metric.serviceName, metric.name].some(
+    (name) => name === AGENT_SERVICE_NAME || name?.startsWith(AGENT_SERVICE_ATTEMPT_PREFIX)
+  );
+}
 
 export function chromiumRole(
   metric: { pid: number; type: string; serviceName?: string; name?: string },
   kinds: ChromiumPidKinds
 ): ResourceProcessRole {
-  if (metric.serviceName === AGENT_SERVICE_NAME || metric.name === AGENT_SERVICE_NAME) {
-    return 'agent';
-  }
+  if (isAgentWorkerMetric(metric)) return 'agent';
   if (metric.type === 'Browser') return 'main';
   if (metric.type === 'GPU') return 'gpu';
   if (metric.type === 'Tab') return kinds.browser.has(metric.pid) ? 'browser' : 'window';

@@ -1,3 +1,4 @@
+import { webUtils } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '../shared/types/ipc';
 import type { ElectronAPI } from './index';
@@ -21,6 +22,21 @@ vi.mock('electron', () => ({
 }));
 
 const electronAPI = mocks.exposeInMainWorld.mock.calls[0]?.[1] as ElectronAPI;
+
+it('resolves a dropped plugin file inside preload before staging it', async () => {
+  const file = new File(['zip'], 'plugin.zip', { type: 'application/zip' });
+  vi.mocked(webUtils.getPathForFile).mockReturnValue('/tmp/plugin.zip');
+  mocks.invoke.mockClear().mockResolvedValueOnce({ ok: true, cancelled: true });
+  expect(await electronAPI.extensionPlugins.stageFile(file)).toEqual({
+    ok: true,
+    cancelled: true,
+  });
+  expect(webUtils.getPathForFile).toHaveBeenCalledWith(file);
+  expect(mocks.invoke).toHaveBeenCalledWith(
+    IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_PATH,
+    '/tmp/plugin.zip'
+  );
+});
 
 it('exposes the device host port, never a raw process or file API', async () => {
   const api = electronAPI.devices;

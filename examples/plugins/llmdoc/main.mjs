@@ -10,10 +10,13 @@ import { createRuntimeSetup } from './setup.mjs';
 const CLI_VERSION = '3.6.0';
 const CLI_TIMEOUT = 5_000;
 const OUTPUT_BYTES = 48 * 1024;
+/** Narrowing stops here: one row still has to fit, and a page below it is not useful. */
+const MIN_NARROWED_LIMIT = 1;
 const MAX_ENTRIES = 1_000;
 const MAX_FILE_BYTES = 512 * 1024;
 const CONTROL = /[\p{Cc}\p{Cf}]/u;
 const CURSOR = /^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/;
+const CURSOR_PLACEHOLDERS = new Set(['', '0', 'null', 'undefined']);
 const READ_GIT = fileURLToPath(new URL('./read-git.cjs', import.meta.url));
 const GIT_GUARD_MARKER = 'LLMDOC_READ_GIT_ERROR: ';
 const OPS = {
@@ -92,10 +95,13 @@ function readArgs(op, args) {
   ) {
     throw new Error('llmdoc 参数不合法。');
   }
-  if (
-    value.cursor !== undefined &&
-    (typeof value.cursor !== 'string' || !CURSOR.test(value.cursor))
-  ) {
+  const cursorText =
+    typeof value.cursor === 'string' ? value.cursor.trim().toLowerCase() : undefined;
+  const cursor =
+    cursorText !== undefined && (CURSOR_PLACEHOLDERS.has(cursorText) || /^\d+$/.test(cursorText))
+      ? undefined
+      : value.cursor;
+  if (cursor !== undefined && (typeof cursor !== 'string' || !CURSOR.test(cursor))) {
     throw new Error('请使用上一页返回的游标。');
   }
   if (op === 'show') return { id: documentId(value.id) };
@@ -105,7 +111,7 @@ function readArgs(op, args) {
     }
     return {
       files: Array.from(new Set(Array.from(value.files, sourcePath))),
-      cursor: value.cursor,
+      cursor,
     };
   }
   if (op === 'search') {
@@ -119,9 +125,9 @@ function readArgs(op, args) {
     ) {
       throw new Error('搜索关键词必须是 1–200 字符的单行文本，且不能以“-”开头。');
     }
-    return { query, cursor: value.cursor };
+    return { query, cursor };
   }
-  return { cursor: value.cursor };
+  return { cursor };
 }
 
 /** @param {unknown} value */
@@ -371,8 +377,9 @@ export async function executable(config, root) {
  * @param {{git: string, metadata: string} | undefined} gitRuntime
  * @returns {Promise<{stdout: string, exitCode: number}>}
  */
-function execute({ node, entry, modules }, root, op, args, signal, gitRuntime) {
-  const { budget, limit } = OPS[op];
+function execute({ node, entry, modules }, root, op, args, signal, gitRuntime, limitOverride) {
+  const { budget } = OPS[op];
+  const limit = limitOverride ?? OPS[op].limit;
   const argv = ['--permission', `--allow-fs-read=${root}`, `--allow-fs-read=${modules}`];
   if (gitRuntime) {
     if (!localAbsolute(READ_GIT)) throw new Error('llmdoc 只读 Git 护栏路径无效。');
@@ -437,7 +444,11 @@ function execute({ node, entry, modules }, root, op, args, signal, gitRuntime) {
           );
         if (!error) return resolve({ stdout, exitCode: 0 });
         if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
-          return reject(new Error('llmdoc 输出超过 48 KiB；请缩小搜索范围或拆分过长文档。'));
+          return reject(
+            Object.assign(new Error('llmdoc 输出超过 48 KiB；请缩小搜索范围或拆分过长文档。'), {
+              code: 'OUTPUT_TOO_LARGE',
+            })
+          );
         if (error.killed) return reject(new Error('llmdoc 执行超时（5 秒）。'));
         if (typeof error.code === 'string')
           return reject(new Error(`无法启动已配置的 Node.js（${error.code}）。`));
@@ -510,6 +521,24 @@ function projectResult(raw, op, args, ids) {
     body: row.body.slice(0, 12000),
     ...(row.body.length > 12000 ? { bodyTruncated: true } : {}),
   };
+}
+
+/**
+ * Whether an overflowed list read may be retried with fewer rows.
+ *
+ * The pinned CLI budgets characters, not bytes, so documents with Chinese text can pass its own
+ * budget and still exceed the subprocess buffer. Only list reads can narrow: `show` and the
+ * diagnostic reports are single payloads whose size the caller cannot control, and returning a
+ * silently shorter list would look like a complete answer.
+ *
+ * @param {Operation} op @param {number} limit
+ */
+function canNarrow(op, limit) {
+  return (
+    (op === 'tree' || op === 'search' || op === 'context') &&
+    limit > MIN_NARROWED_LIMIT &&
+    OPS[op].limit > MIN_NARROWED_LIMIT
+  );
 }
 
 /** @param {unknown} page @param {number} limit @param {number} returned */
@@ -643,17 +672,28 @@ export function activate(enso) {
           throw new Error('当前项目没有此文档 ID，请先刷新知识地图。');
         checkCancelled(ctx.signal);
         try {
-          const { stdout, exitCode } = await execute(
-            runtime,
-            root,
-            op,
-            args,
-            ctx.signal,
-            gitRuntime
-          );
-          if (op === 'tree' || op === 'search' || op === 'show')
-            return projectResult(stdout, op, args, ids);
-          return diagnosticResult(stdout, exitCode, op);
+          let limit = OPS[op].limit;
+          for (;;) {
+            let output;
+            try {
+              output = await execute(runtime, root, op, args, ctx.signal, gitRuntime, limit);
+            } catch (error) {
+              // Only a list page can retry with fewer rows; a whole document stays refused.
+              if (!(error instanceof Error) || error.code !== 'OUTPUT_TOO_LARGE') throw error;
+              if (!canNarrow(op, limit)) throw error;
+              limit = Math.max(MIN_NARROWED_LIMIT, Math.floor(limit / 2));
+              continue;
+            }
+            const { stdout, exitCode } = output;
+            const result =
+              op === 'tree' || op === 'search' || op === 'show'
+                ? projectResult(stdout, op, args, ids)
+                : diagnosticResult(stdout, exitCode, op);
+            // Say so in the payload: the list is real, just not the requested page size.
+            return limit === OPS[op].limit || !isRecord(result)
+              ? result
+              : { ...result, narrowed: true, limit };
+          }
         } catch (error) {
           if (error instanceof SyntaxError) throw badOutput();
           throw error;

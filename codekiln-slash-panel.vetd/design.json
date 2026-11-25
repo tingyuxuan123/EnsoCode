@@ -1,0 +1,44 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.6554937388423064,
+		"x": -1857.2356790209742,
+		"y": 225.76211897675665
+	},
+	"frames": [
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 2640,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "CodeKiln · 斜杠命令托盘",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "CodeKiln · 斜杠命令托盘"
+			}
+		},
+		{
+			"id": "selected",
+			"file": "frames/selected.tsx",
+			"x": 1520,
+			"y": 0,
+			"width": 1040,
+			"height": 360,
+			"title": "CodeKiln · 选中后：技能胶囊",
+			"meta": {
+				"width": 1040,
+				"height": 360,
+				"title": "CodeKiln · 选中后：技能胶囊"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	},
+	"interactionMode": "desktop"
+}

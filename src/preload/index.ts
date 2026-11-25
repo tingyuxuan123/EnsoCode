@@ -1558,8 +1558,28 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED, listener);
     },
+    createAuthoringDraft: (sessionId: string): Promise<PluginAuthoringCreateResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CREATE, sessionId),
+    validateAuthoringDraft: (
+      sessionId: string,
+      pluginId: string
+    ): Promise<PluginAuthoringValidationResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_VALIDATE, sessionId, pluginId),
+    stageAuthoringDraft: (sessionId: string, pluginId: string): Promise<PluginStageResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_STAGE, sessionId, pluginId),
     pickAndStage: (kind: 'dir' | 'zip'): Promise<PluginStageResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_PICK_AND_STAGE, kind),
+    stageFile: (file: File): Promise<PluginStageResult> => {
+      let path = '';
+      try {
+        path = webUtils.getPathForFile(file);
+      } catch {
+        path = '';
+      }
+      return path
+        ? ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_PATH, path)
+        : Promise.resolve({ ok: false, error: '无法读取拖入的文件。' });
+    },
     stageFromUrl: (url: string): Promise<PluginStageResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_URL, url),
     commit: (token: string): Promise<ExtensionPluginCommitResult> =>
@@ -1730,6 +1750,8 @@ import type {
   ExtensionPluginMarketList,
   ExtensionPluginNotice,
   ExtensionPluginReadmeResult,
+  PluginAuthoringCreateResult,
+  PluginAuthoringValidationResult,
   RegistryNotice,
 } from '@shared/extensionPlugins/types';
 

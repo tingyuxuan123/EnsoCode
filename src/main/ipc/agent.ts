@@ -630,6 +630,23 @@ function projectIdFor(sessionId: string): string | undefined {
   return id && sourceAuthority?.project(id)?.kind !== 'scratch' ? id : undefined;
 }
 
+/** Authoring writes only into a live local Code root's registered project/worktree. */
+export function pluginAuthoringWorkspace(
+  sessionId: string
+): { cwd: string; projectId: string } | null {
+  const conversation = sourceAuthority?.conversation(sessionId);
+  const project = conversation ? sourceAuthority?.project(conversation.projectId) : undefined;
+  if (
+    !conversation ||
+    !project ||
+    (project.kind && project.kind !== 'local') ||
+    sessionWorktreeBusy(sessionId)
+  )
+    return null;
+  const cwd = authoritativeSpawnCwd(sessionId);
+  return cwd ? { cwd, projectId: conversation.projectId } : null;
+}
+
 /** 插件 fs 代办的项目根：只认权威记录；SSH 会话的目录不在本机，返回 null。 */
 export function pluginProjectRoot(sessionId: string): string | null {
   const conversation = sourceAuthority?.conversation(sessionId);

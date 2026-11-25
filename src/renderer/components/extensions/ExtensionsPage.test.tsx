@@ -6,6 +6,9 @@ import { ExtensionsPage } from './ExtensionsPage';
 
 const fixture = vi.hoisted(() => ({
   stage: vi.fn(),
+  stageFile: vi.fn(),
+  marketList: vi.fn(),
+  marketSetChinaMirror: vi.fn(),
   checkUpdates: vi.fn(),
   setPluginAutoUpdate: vi.fn(),
   empty: false,
@@ -101,12 +104,16 @@ vi.mock('@/plugins/useNativePluginManager', async (importOriginal) => ({
     error: fixture.nativeError,
     registryError: '',
     stage: fixture.stage,
+    stageFile: fixture.stageFile,
     checkUpdates: fixture.checkUpdates,
   }),
 }));
 vi.mock('@/plugins/NativePluginFlows', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/plugins/NativePluginFlows')>()),
   NativePluginFlows: () => null,
+}));
+vi.mock('./PluginAuthoringDialog', () => ({
+  PluginAuthoringDialog: () => <div data-slot="plugin-authoring-dialog" />,
 }));
 vi.mock('@/components/settings/LocalAssetImportDialog', () => ({
   LocalAssetImportDialog: ({ kind, open }: { kind: string; open?: boolean }) =>
@@ -117,11 +124,21 @@ vi.mock('@/components/settings/McpEditDialog', () => ({
     <div data-server={server === 'new' ? 'new' : 'existing'} data-slot="mcp-edit-dialog" />
   ),
 }));
-vi.mock('@/components/settings/PluginMarket', () => ({
-  PluginMarket: () => (
-    <section data-slot="plugin-market">
-      <h3>Plugin market</h3>
-      <article data-slot="market-card">Community search</article>
+vi.mock('./ExtensionShowcase', () => ({
+  ExtensionShowcase: ({
+    entry,
+    onManageInstalled,
+  }: {
+    entry: { kind: string; plugin: { id: string; name: string } };
+    onManageInstalled: (id: string) => void;
+  }) => (
+    <section data-slot="test-extension-showcase">
+      <h2>{entry.plugin.name}</h2>
+      {entry.kind === 'installed' && (
+        <button type="button" onClick={() => onManageInstalled(entry.plugin.id)}>
+          Manage installed fixture
+        </button>
+      )}
     </section>
   ),
 }));
@@ -142,9 +159,47 @@ beforeEach(async () => {
     mime: 'image/svg+xml',
     base64: ICON_DATA.slice(ICON_DATA.indexOf(',') + 1),
   });
+  fixture.stageFile.mockClear();
+  fixture.marketList.mockResolvedValue({
+    ok: true,
+    stale: false,
+    chinaMirror: false,
+    marketId: 'collabra',
+    plugins: [
+      {
+        id: 'collabra.paper',
+        name: 'Collabra Paper',
+        description: 'Warm neutral theme',
+        tier: 'official',
+        tags: ['theme'],
+        latest: '1.0.0',
+        permissions: [],
+        compatibility: { minAppVersion: '0.2.80', testedSurfaces: [] },
+        updateAvailable: false,
+      },
+      {
+        id: 'local.conflict',
+        name: 'Community search',
+        description: 'Search notes',
+        tier: 'community',
+        tags: ['search'],
+        latest: '2.0.0',
+        permissions: [],
+        compatibility: { minAppVersion: '0.2.80', testedSurfaces: [] },
+        installedSource: 'other',
+        updateAvailable: false,
+      },
+    ],
+  });
+  fixture.marketSetChinaMirror.mockResolvedValue({ ok: true });
   Object.assign(window, {
     electronAPI: {
-      extensionPlugins: { asset: fixture.asset },
+      extensionPlugins: {
+        asset: fixture.asset,
+        marketList: fixture.marketList,
+        marketSetChinaMirror: fixture.marketSetChinaMirror,
+        onChanged: vi.fn(() => () => {}),
+      },
       window: { openSettings: vi.fn() },
     },
   });
@@ -152,6 +207,32 @@ beforeEach(async () => {
   document.body.append(container);
   root = createRoot(container);
   await act(async () => root.render(<ExtensionsPage onBack={() => {}} />));
+  const mine = container.querySelector<HTMLButtonElement>('[data-extension-scope="mine"]');
+  if (mine) await act(async () => mine.click());
+});
+it('installs a dropped plugin package through the native staging path', async () => {
+  const file = new File(['zip'], 'plugin.zip', { type: 'application/zip' });
+  const page = container.querySelector('[data-slot="extensions-page"]');
+  if (!(page instanceof HTMLElement)) throw new Error('Extensions page missing');
+  const event = new Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', {
+    value: { types: ['Files'], files: [file] },
+  });
+  await act(async () => page.dispatchEvent(event));
+  expect(fixture.stageFile).toHaveBeenCalledWith(file);
+});
+
+it('shows the drop target while a file is dragged over the page', async () => {
+  const page = container.querySelector('[data-slot="extensions-page"]');
+  if (!(page instanceof HTMLElement)) throw new Error('Extensions page missing');
+  const enter = new Event('dragenter', { bubbles: true, cancelable: true });
+  Object.defineProperty(enter, 'dataTransfer', { value: { types: ['Files'] } });
+  await act(async () => page.dispatchEvent(enter));
+  expect(page.textContent).toContain('Drop to install plugin');
+  const leave = new Event('dragleave', { bubbles: true, cancelable: true });
+  Object.defineProperty(leave, 'dataTransfer', { value: { types: ['Files'] } });
+  await act(async () => page.dispatchEvent(leave));
+  expect(page.textContent).not.toContain('Drop to install plugin');
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -209,16 +290,14 @@ it('文件夹和 ZIP 安装都进入原有预览流程', async () => {
   expect(fixture.stage).toHaveBeenCalledWith('zip');
 });
 
-it('作者指南展示本地模板和校验命令，不触发安装', async () => {
+it('制作入口打开插件需求表单，不触发安装', async () => {
   await act(async () => button('Add extension').click());
   const guide = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((entry) =>
     entry.textContent?.includes('Build your own plugin')
   );
   expect(guide).toBeDefined();
   await act(async () => guide?.click());
-  expect(document.body.textContent).toContain('pnpm plugin:init');
-  expect(document.body.textContent).toContain('pnpm plugin:validate');
-  expect(document.body.textContent).toContain('a first install is enabled as soon as you confirm');
+  expect(container.querySelector('[data-slot="plugin-authoring-dialog"]')).not.toBeNull();
   expect(fixture.stage).not.toHaveBeenCalled();
 });
 
@@ -366,17 +445,17 @@ const headerRegion = () => container.querySelector<HTMLElement>('[data-slot="ext
 const itemRows = () => [...container.querySelectorAll<HTMLElement>('[data-slot="extension-item"]')];
 
 it('打开插件市场后只显示市场内容，已安装管理工具栏、列表和空态不再堆在下面', async () => {
-  await act(async () => button('Browse plugin market').click());
-  expect(contentRegion().querySelector('[data-slot="plugin-market"]')).not.toBeNull();
+  await act(async () => button('Public').click());
+  expect(contentRegion().querySelector('[data-slot="extensions-discovery"]')).not.toBeNull();
   expect(container.textContent).toContain('Community search');
   expect(container.querySelector('input[aria-label="Search extensions"]')).toBeNull();
-  expect(container.querySelector('[data-slot="tabs-list"]')).toBeNull();
+  expect(container.querySelector('[aria-label="Extension type"]')).toBeNull();
   expect(itemRows()).toHaveLength(0);
   expect(container.querySelector('[data-slot="extensions-empty"]')).toBeNull();
   expect(container.querySelector('[data-slot="extension-notice"]')).toBeNull();
 
-  await act(async () => button('Back to installed').click());
-  expect(container.querySelector('[data-slot="plugin-market"]')).toBeNull();
+  await act(async () => button('My extensions').click());
+  expect(container.querySelector('[data-slot="extensions-discovery"]')).toBeNull();
   expect(itemRows()).toHaveLength(4);
   expect(container.querySelector('input[aria-label="Search extensions"]')).not.toBeNull();
 });
@@ -385,7 +464,7 @@ it('没有已安装扩展时打开市场也不会冒出首个扩展空态', asyn
   fixture.empty = true;
   await act(async () => root.render(<ExtensionsPage onBack={() => {}} />));
   expect(container.querySelector('[data-slot="extensions-empty"]')).not.toBeNull();
-  await act(async () => button('Browse plugin market').click());
+  await act(async () => button('Public').click());
   expect(container.querySelector('[data-slot="extensions-empty"]')).toBeNull();
   expect(container.textContent).not.toContain('Add your first extension');
 });
@@ -396,8 +475,8 @@ it('往返插件市场后已安装页的搜索词与分类筛选保持不变', a
   expect(itemRows()).toHaveLength(1);
   expect(itemRows()[0].textContent).toContain('Local Notes');
 
-  await act(async () => button('Browse plugin market').click());
-  await act(async () => button('Back to installed').click());
+  await act(async () => button('Public').click());
+  await act(async () => button('My extensions').click());
 
   const input = container.querySelector<HTMLInputElement>('input[aria-label="Search extensions"]');
   expect(input?.value).toBe('Local');
@@ -408,10 +487,10 @@ it('往返插件市场后已安装页的搜索词与分类筛选保持不变', a
 it('切换市场与管理时把内容滚动位置归零，避免从市场底部回来看到空白', async () => {
   contentRegion().scrollTop = 320;
   expect(contentRegion().scrollTop).toBe(320);
-  await act(async () => button('Browse plugin market').click());
+  await act(async () => button('Public').click());
   expect(contentRegion().scrollTop).toBe(0);
   contentRegion().scrollTop = 640;
-  await act(async () => button('Back to installed').click());
+  await act(async () => button('My extensions').click());
   expect(contentRegion().scrollTop).toBe(0);
 });
 
@@ -429,37 +508,100 @@ it('标题和顶部操作不在内容滚动区里，整页只有一个纵向滚�
       .map((element) => element.getAttribute('data-slot'));
   expect(scrollers()).toEqual(['extensions-content']);
   expect(headerRegion().querySelector('h1')?.textContent).toBe('Extensions');
-  expect(headerRegion().textContent).toContain('Add extension');
+  expect(headerRegion().textContent).toContain('My extensions');
   expect(contentRegion().contains(headerRegion())).toBe(false);
-  expect(contentRegion().contains(button('Add extension'))).toBe(false);
+  expect(contentRegion().contains(button('Add extension'))).toBe(true);
 
-  await act(async () => button('Browse plugin market').click());
+  await act(async () => button('Public').click());
   expect(scrollers()).toEqual(['extensions-content']);
-  expect(headerRegion().textContent).toContain('Back to installed');
-  expect(contentRegion().querySelector('[data-slot="plugin-market"]')).not.toBeNull();
+  expect(headerRegion().textContent).toContain('Public');
+  expect(contentRegion().querySelector('[data-slot="extensions-discovery"]')).not.toBeNull();
 });
 
 it('插件市场操作失败的提示在市场态仍然可见', async () => {
   fixture.nativeError = 'Could not reach plugin registry';
   await act(async () => root.render(<ExtensionsPage onBack={() => {}} />));
-  await act(async () => button('Browse plugin market').click());
-  expect(container.querySelector('[data-slot="plugin-market"]')).not.toBeNull();
+  await act(async () => button('Public').click());
+  expect(container.querySelector('[data-slot="extensions-discovery"]')).not.toBeNull();
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
     'Could not reach plugin registry'
   );
 });
 
 it('市场打开时收到插件定位请求会退出市场并直接打开该插件详情', async () => {
-  await act(async () => button('Browse plugin market').click());
-  expect(container.querySelector('[data-slot="plugin-market"]')).not.toBeNull();
+  await act(async () => button('Public').click());
+  expect(container.querySelector('[data-slot="extensions-discovery"]')).not.toBeNull();
   await act(async () =>
     root.render(
       <ExtensionsPage onBack={() => {}} request={{ serial: 1, pluginId: fixture.native.id }} />
     )
   );
-  expect(container.querySelector('[data-slot="plugin-market"]')).toBeNull();
+  expect(container.querySelector('[data-slot="extensions-discovery"]')).toBeNull();
   expect(document.querySelector('[data-slot="sheet-popup"]')?.textContent).toContain('Local Notes');
   expect(fixture.stage).not.toHaveBeenCalled();
+});
+
+it('默认打开公开发现，只有实际市场条目可以被推荐，详情返回同一份目录', async () => {
+  await act(async () => root.render(<ExtensionsPage key="fresh" onBack={() => {}} />));
+  expect(button('Public').getAttribute('aria-selected')).toBe('true');
+  const feature = container.querySelector('[data-slot="extension-feature"]');
+  expect(feature?.textContent).toContain('Collabra Paper');
+  expect(feature?.textContent).not.toContain('Local Notes');
+  await act(async () => feature?.querySelector('button')?.click());
+  const drawer = document.querySelector('[data-extension-detail-drawer]');
+  expect(drawer?.getAttribute('role')).toBe('dialog');
+  expect(drawer?.querySelector('[data-slot="test-extension-showcase"]')?.textContent).toContain(
+    'Collabra Paper'
+  );
+  expect(feature).toBe(container.querySelector('[data-slot="extension-feature"]'));
+  expect(feature?.closest('.hidden')).toBeNull();
+  expect(fixture.stage).not.toHaveBeenCalled();
+  await act(async () =>
+    drawer?.querySelector<HTMLButtonElement>('[data-slot="sheet-close"]')?.click()
+  );
+  expect(document.querySelector('[data-extension-detail-drawer][data-open]')).toBeNull();
+  expect(container.querySelector('[data-slot="extension-feature"]')).not.toBeNull();
+});
+
+it('详情抽屉开合不重置市场搜索、滚动位置或已选中的范围', async () => {
+  await act(async () => button('Public').click());
+  const search = container.querySelector<HTMLInputElement>('input[aria-label="Search plugins"]')!;
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  await act(async () => {
+    setValue.call(search, 'paper');
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const row = container.querySelector<HTMLButtonElement>(
+    '[data-market-plugin="collabra.paper"] button'
+  );
+  const overview = contentRegion();
+  overview.scrollTop = 134;
+  row?.focus();
+  await act(async () => row?.click());
+  expect(document.querySelector('[data-extension-detail-drawer]')).not.toBeNull();
+  expect(contentRegion().scrollTop).toBe(134);
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>('[data-extension-detail-drawer] [data-slot="sheet-close"]')
+      ?.click()
+  );
+  expect(button('Public').getAttribute('aria-selected')).toBe('true');
+  expect(contentRegion().scrollTop).toBe(134);
+  expect(search.value).toBe('paper');
+  expect(container.querySelector('[data-market-plugin="local.conflict"]')).toBeNull();
+});
+
+it('公开列表的添加只走安装预览，其他来源的同名插件不被覆盖', async () => {
+  await act(async () => button('Public').click());
+  const row = (id: string) => container.querySelector(`[data-market-plugin="${id}"]`);
+  const paper = row('collabra.paper');
+  const other = row('local.conflict');
+  const add = paper?.querySelector<HTMLButtonElement>('[data-slot="market-row-action"]');
+  expect(add).toBeDefined();
+  expect(other?.querySelector('[data-slot="market-row-action"]')).toBeNull();
+  await act(async () => add?.click());
+  expect(fixture.stage).toHaveBeenCalledExactlyOnceWith('market', 'collabra.paper');
+  expect(container.querySelector('[data-slot="test-extension-showcase"]')).toBeNull();
 });
 
 const rowOf = (name: string) =>
@@ -473,6 +615,9 @@ it('原生插件列表用安装包里的清单图标，停用状态不依赖运�
   expect(fixture.native.state).toBe('disabled');
   expect(fixture.asset).toHaveBeenCalledWith(fixture.native.id, 'icon.svg');
   expect(rowIconSrc('Local Notes')).toBe(ICON_DATA);
+  expect(
+    rowOf('Local Notes').querySelector('[data-slot="plugin-icon"]')?.classList.contains('size-8')
+  ).toBe(true);
   expect(rowOf('Local Notes').querySelector('[data-slot="plugin-icon-fallback"]')).toBeNull();
 });
 
@@ -522,9 +667,15 @@ it('清单没声明图标时不请求 asset，保持默认图标', async () => {
   expect(rowOf('Local Notes').querySelector('[data-slot="plugin-icon-fallback"]')).not.toBeNull();
 });
 
-it('详情标题用同一 PluginIcon 渲染插件的真实图标', async () => {
+it('已安装原生插件也在宽抽屉查看，并可进入原有管理抽屉', async () => {
   await act(async () => rowOf('Local Notes').click());
-  const title = document.querySelector('[data-slot="sheet-title"]');
+  const drawer = document.querySelector('[data-extension-detail-drawer][data-open]');
+  expect(drawer?.textContent).toContain('Local Notes');
+  await act(async () => button('Manage installed fixture').click());
+  expect(document.querySelector('[data-extension-detail-drawer][data-open]')).toBeNull();
+  const title = document.querySelector(
+    '[data-slot="sheet-popup"][data-open] [data-slot="sheet-title"]'
+  );
   const icon = title?.querySelector<HTMLImageElement>('[data-slot="plugin-icon"]');
   expect(icon?.getAttribute('src')).toBe(ICON_DATA);
   expect(fixture.asset).toHaveBeenCalledWith(fixture.native.id, 'icon.svg');

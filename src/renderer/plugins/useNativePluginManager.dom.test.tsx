@@ -53,6 +53,7 @@ function setup() {
       return unsubscribe;
     },
     pickAndStage: vi.fn().mockResolvedValue({ ok: true, preview }),
+    stageFile: vi.fn().mockResolvedValue({ ok: true, preview }),
     stageFromUrl: vi.fn().mockResolvedValue({ ok: true, preview }),
     discard: vi.fn().mockResolvedValue({ ok: true }),
     commit: vi.fn().mockResolvedValue({ ok: true }),

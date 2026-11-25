@@ -1,11 +1,11 @@
-import type { ExtensionPluginMarketEntry } from '@shared/extensionPlugins/types';
 import { Puzzle } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import type { NativePluginManager } from '@/plugins/useNativePluginManager';
+import { usePluginMarketCatalog } from '@/plugins/usePluginMarketCatalog';
 import { PluginReadmeDialog } from './PluginReadmeDialog';
 import {
   filterMarketPlugins,
@@ -42,45 +42,10 @@ function MarketIcon({ src }: { src?: string }) {
 /** Market is a read-only catalog until an explicit stage → review → commit gesture. */
 export function PluginMarket({ manager }: { manager: NativePluginManager }) {
   const { t, locale } = useI18n();
-  const [plugins, setPlugins] = useState<ExtensionPluginMarketEntry[]>([]);
-  const [marketId, setMarketId] = useState('collabra');
-  const [error, setError] = useState('');
-  const [stale, setStale] = useState(false);
-  const [mirror, setMirror] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const { plugins, marketId, error, stale, mirror, loading, load } = usePluginMarketCatalog();
   const [query, setQuery] = useState('');
   const [section, setSection] = useState<MarketSection>('all');
   const [readme, setReadme] = useState<{ id: string; name: string; from: 'market' } | null>(null);
-  const generation = useRef(0);
-  const load = useCallback(async (refresh = false) => {
-    const mine = ++generation.current;
-    setLoading(true);
-    setError('');
-    try {
-      const result = await window.electronAPI.extensionPlugins.marketList(refresh);
-      if (mine !== generation.current) return;
-      setMirror(result.chinaMirror);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setPlugins(result.plugins);
-      setMarketId(result.marketId);
-      setStale(result.stale);
-    } catch (reason) {
-      if (mine === generation.current) setError(String(reason));
-    } finally {
-      if (mine === generation.current) setLoading(false);
-    }
-  }, []);
-  useEffect(() => {
-    void load();
-    const unsubscribe = window.electronAPI.extensionPlugins.onChanged(() => void load());
-    return () => {
-      generation.current++;
-      unsubscribe();
-    };
-  }, [load]);
   return (
     <section className="space-y-3" data-settings-row="plugins.market" data-slot="plugin-market">
       <div className="flex flex-wrap items-center gap-2">
@@ -95,17 +60,7 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
           <Switch
             checked={mirror}
             disabled={loading}
-            onCheckedChange={(value) => {
-              setLoading(true);
-              void window.electronAPI.extensionPlugins
-                .marketSetChinaMirror(value)
-                .then((result) => {
-                  if (!result.ok) {
-                    setError(result.error ?? 'Operation failed');
-                    setLoading(false);
-                  } else void load(true);
-                });
-            }}
+            onCheckedChange={(value) => void load(true, value)}
           />
         </label>
         <Button size="sm" variant="outline" disabled={loading} onClick={() => void load(true)}>
@@ -223,7 +178,7 @@ export function PluginMarket({ manager }: { manager: NativePluginManager }) {
                       ? 'Update'
                       : plugin.installedVersion
                         ? 'Installed'
-                        : 'Review installation'
+                        : 'Install'
                 )}
               </Button>
             </div>

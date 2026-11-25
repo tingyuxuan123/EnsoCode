@@ -5,6 +5,40 @@ export const SUBAGENT_MODELS_CONFIGURE_PROMPT =
   'Configure "Let the agent pick subagent models" for me. How it is used: when the main agent dispatches a subagent or coworker (built-in types: scout for read-only recon, reviewer for code review, tester for writing tests, worker for implementation), it reads each entry\'s description from the tool\'s model parameter to choose a model per subtask — so descriptions are decision rules, not marketing copy. Steps: 1) read the current entries and toggle state; 2) list providers with valid credentials and their enabled models, never invent models; 3) pick 2–4 models that cover: a cheap, fast, long-context model for recon / reading / summarizing; a strong reasoning model for review, architecture and hard debugging; a reliable coding model for implementation; 4) add what is missing, fix duplicates or unusable entries, then enable the toggle; 5) each description is one short sentence in my interface language: when to use it, relative cost / speed, one caveat. Finish by listing the final entries with the reason for each.';
 
 export const zhTranslations: Record<string, string> = {
+  'Build your own plugin': '制作插件',
+  'Plugin authoring': '插件制作',
+  'Describe what you want to make. CodeKiln creates a starter in this project and prepares a chat draft without sending it.':
+    '描述你想做的插件。CodeKiln 会在当前项目创建模板，并把需求填入聊天草稿，不会自动发送。',
+  'Plugin authoring is unavailable in this version.': '当前版本不支持在应用内制作插件。',
+  'Open the main conversation of a local Code project, then return here to start.':
+    '请先打开本地 Code 项目的主会话，再回到这里开始。',
+  'What should your plugin do?': '你希望插件做什么？',
+  'For example, add a sidebar for project notes.': '例如：加一个侧栏，用来查看项目笔记。',
+  'Creating plugin starter…': '正在创建插件模板…',
+  'Create plugin starter': '创建插件模板',
+  'A local draft. Nothing is installed until you review and confirm permissions.':
+    '这是本地草稿。只有你检查并确认权限后才会安装。',
+  '1. Edit your plugin': '1. 编辑插件',
+  'Open plugin manifest': '打开插件清单',
+  'The request was placed in your chat draft. Send it when ready, or edit the files yourself.':
+    '需求已填入聊天草稿。可以手动发送，也可以自己编辑插件文件。',
+  'Your existing chat draft was left untouched. Use an empty composer or copy the request.':
+    '原有聊天草稿未改动。可以清空输入框后填入，或者复制需求。',
+  'Fill chat draft': '填入聊天草稿',
+  'Copy request': '复制需求',
+  'The composer is not empty or is unavailable.': '输入框不为空或暂不可用。',
+  '2. Validate the files': '2. 校验文件',
+  'Checks the manifest and referenced files without running plugin code.':
+    '检查清单和引用文件，不执行插件代码。',
+  'Validating plugin…': '正在校验插件…',
+  'Run static validation': '运行静态校验',
+  'Static validation passed': '静态校验通过',
+  '3. Try it locally': '3. 本机试用',
+  'Review the current files and their permissions before installing a local copy.':
+    '先查看当前文件声明的权限，再决定是否安装本地副本。',
+  'Review permissions and try': '查看权限并试用',
+  'This plugin draft belongs to a different workspace. Open plugin authoring again from Extensions.':
+    '此插件草稿属于另一个工作区。请从扩展页重新打开插件制作。',
   'Plugin market': '插件市场',
   'CodeKiln plugin market': 'CodeKiln 精选插件市场',
   'CodeKiln market': 'CodeKiln 市场来源',
@@ -19,19 +53,266 @@ export const zhTranslations: Record<string, string> = {
   'Installed from another source. The plugin keeps working; cross-market migration is not supported yet.':
     '同名插件已从其它来源安装；旧插件保持可用，跨市场迁移暂不支持。',
   'Browse plugin market': '浏览插件市场',
+  Public: '公开',
+  'My extensions': '我的',
+  'Extension scope': '扩展范围',
+  'Featured extension': '精选扩展',
+  'View extension details': '查看详情',
+  'Permissions & data access': '了解与配置权限',
+  'Back to extension details': '返回扩展详情',
+  'Current installation': '当前安装',
+  'Pending version {{version}}': '待审批版本 {{version}}',
+  'Project knowledge': '项目知识',
+  'Know what to review after a code change': '代码改了，知道哪些文档需要复核',
+  'Start from a changed source file, find the docs that describe it, and see what needs review before asking the agent to update anything.':
+    '从改动的源码文件出发，找出它关联的文档，先弄清哪些需要复核，再决定是否让 Agent 更新。',
+  'Look up docs by source path': '按源码路径反查',
+  'Read-only impact checks': '只读影响检查',
+  Affected: '受影响',
+  'Document needs review': '待复核',
+  'Which docs need review after I changed sign-in?': '改了登录逻辑，哪些文档需要复核？',
+  'The change touches the session flow. I found the authentication overview and the sign-in guide. I’ll check both against the source and suggest edits before changing any files.':
+    '这次改动涉及会话流程，关联了认证概览和登录指南。我会先回源码核对，再给出修改建议，不直接改文件。',
+  'Demo conversation': '演示对话',
+  'From searching the repository to a review list': '从翻找仓库，到拿到复核清单',
+  'Manual lookup': '手动查找',
+  'With Knowledge Map': '使用知识地图',
+  'Search for a title or keyword and open likely matches.':
+    '按标题或关键词搜索，再逐份打开可能相关的文档。',
+  'Look up the docs related to the exact changed source path.':
+    '用实际改动的源码路径查找关联文档。',
+  'Check each result against the Git diff yourself.': '自己把搜索结果逐项和 Git 改动对照。',
+  'Separate affected docs, docs to review, and unmapped source files.':
+    '区分受影响的文档、待复核文档与未映射的源码。',
+  'Open Knowledge Map': '打开知识地图',
+  'The plugin reported an error': '插件报告了一个错误',
+  'Show details': '展开详情',
+  'Hide details': '收起详情',
+  'Copy error': '复制错误',
+  'Market sources': '来源',
+  'Refresh plugin market': '刷新插件市场',
+  'Filter plugins': '筛选插件',
+  'Clear filters': '清除筛选',
   'Hide plugin market': '收起插件市场',
   'Back to installed': '返回已安装',
   'China mirror': '国内镜像',
   'Search plugins': '搜索插件',
   'Showing cached plugin catalog': '正在显示缓存的插件目录',
   'No plugins found': '未找到插件',
-  'Review installation': '预览安装',
+  Install: '安装',
   Installed: '已安装',
   'Check plugin updates': '检查插件更新',
   'Automatically update plugins': '自动更新插件',
   'Development mode (watch folder)': '开发模式（监听源目录）',
   Documentation: '使用说明',
   'No documentation yet': '暂无使用说明',
+  // Native plugin permission and data access.
+  'Permission & Data Access': '权限与数据访问',
+  'Declared permissions': '声明权限',
+  'Access status': '授权状态',
+  'Reviewed at installation': '安装时审阅',
+  'Pending approval': '待批准',
+  'Update candidate': '候选更新',
+  'Candidate version: {{version}}': '候选版本：{{version}}',
+  'These permissions describe the installed package. They do not indicate which capabilities are currently in use.':
+    '这些是当前安装包的权限，不代表插件此刻正在使用这些能力。',
+  'These permissions are declared by the package. Review the package and its permissions before installing.':
+    '这些是安装包声明的权限。请在安装前审阅安装包和权限。',
+  'These are the update candidate’s declarations, not the current installation’s permissions.':
+    '以下是候选更新声明的权限，不是当前已安装版本的权限。',
+  'Unclassified permissions are not included in the high-risk count.':
+    '未分类的权限不计入高风险数量。',
+  'Low risk': '低风险',
+  'Medium risk': '中风险',
+  'High risk': '高风险',
+  Unclassified: '未分类',
+  'Interface & input': '界面与输入',
+  'Controls and content in the app interface.': '应用界面中的控件和内容。',
+  'Project data': '项目数据',
+  'Project files accessed through CodeKiln.': '通过 CodeKiln 访问的项目文件。',
+  'Sessions & agent events': '会话与 Agent 事件',
+  'Conversation state, agent activity, and intervention.': '会话状态、Agent 活动和干预操作。',
+  'Tools & execution': '工具与执行',
+  'Plugin tools, external processes, and model runs.': '插件工具、外部进程和模型运行。',
+  'Network & browser': '网络与浏览器',
+  'Host requests and browser actions.': '宿主网络请求和浏览器操作。',
+  'Unclassified permissions': '未分类权限',
+  'Identifiers not recognized by this CodeKiln version.': '当前 CodeKiln 版本不识别的权限标识。',
+  'Host capability details': '宿主能力详情',
+  'Unknown capability details': '未知能力详情',
+  'Access scope': '访问范围',
+  'What this permission enables': '此权限允许的操作',
+  'This CodeKiln version does not describe the scope, effect, or risk of this declaration.':
+    '当前 CodeKiln 版本未说明此项声明的范围、作用或风险。',
+  'No host capability description is available.': '暂无宿主能力说明。',
+  'Host capability flow': '宿主能力流向示意',
+  'Exchanges data or actions with': '与其交换数据或发出操作',
+  'Sends data or actions to': '向其发送数据或发出操作',
+  'App interface': '应用界面',
+  'System notifications': '系统通知',
+  'Conversation draft': '对话草稿',
+  'Project files': '项目文件',
+  'Remote host': '远程主机',
+  'MCP service': 'MCP 服务',
+  'Other plugins': '其他插件',
+  'System clipboard': '系统剪贴板',
+  'System browser': '系统浏览器',
+  'Model service': '模型服务',
+  'Provide agent tools': '提供 Agent 工具',
+  'The agent can call tools contributed by this plugin.': 'Agent 可以调用此插件提供的工具。',
+  'Plugin tool calls are subject to the host’s tool approval and session rules.':
+    '插件工具调用受宿主的工具审批和会话规则约束。',
+  'Extend the main interface': '扩展主界面',
+  'Adds components or suggestions to supported parts of CodeKiln’s interface.':
+    '在 CodeKiln 支持的界面位置添加组件或建议。',
+  'Host slots and contributed suggestions. If the plugin ships ui.js, that module runs with main-interface access.':
+    '宿主界面挂点和插件提供的建议。若包含 ui.js，此模块与主界面同权运行。',
+  'Provide plugin views': '提供插件视图',
+  'Contributes sidebar views or file viewers and exchanges data with its own views.':
+    '提供侧栏视图或文件查看器，并与自身视图交换数据。',
+  'The plugin’s declared views and file viewers, not arbitrary CodeKiln panels.':
+    '限插件声明的视图和文件查看器，不包括任意 CodeKiln 面板。',
+  'Show notifications': '显示通知',
+  'Asks CodeKiln to display system notifications.': '请求 CodeKiln 显示系统通知。',
+  'Notifications sent through the host are subject to current notification settings.':
+    '通过宿主发出的通知遵循当前通知设置。',
+  'Read and edit the draft': '读取和编辑草稿',
+  'Reads or edits unsent text in the conversation composer; does not submit it.':
+    '读取或编辑对话输入框中未发送的文本，不会提交。',
+  'The invocation’s composer. Host draft writes check the current version and editing state.':
+    '限本次调用所属的输入框。宿主写入草稿前会核对版本和编辑状态。',
+  'Read project files': '读取项目文件',
+  'Reads text from project files through the host file API.':
+    '通过宿主文件 API 读取项目文件中的文本。',
+  'Project-relative locations declared by the plugin. Exact paths are not shown here.':
+    '限插件声明的项目相对位置，此处不显示具体路径。',
+  'Write project files': '写入项目文件',
+  'Writes text to project files through the host file API.':
+    '通过宿主文件 API 向项目文件写入文本。',
+  'Declared project-relative locations, subject to session write policy. Exact paths are not shown here.':
+    '限声明的项目相对位置，并受会话写入策略约束。此处不显示具体路径。',
+  'Make network requests': '发出网络请求',
+  'Sends requests and receives responses through the host network API.':
+    '通过宿主网络 API 发送请求并接收响应。',
+  'Host requests are limited to declared network hosts. Exact hosts are not shown here.':
+    '宿主请求限声明的网络主机，此处不显示具体主机。',
+  'Provide MCP servers': '提供 MCP 服务',
+  'Contributes MCP servers that CodeKiln can start and use.':
+    '提供 CodeKiln 可启动和使用的 MCP 服务。',
+  'Declared local server commands, arguments and environment. Exact commands are not shown here.':
+    '限声明的本地服务命令、参数和环境变量，此处不显示具体命令。',
+  'Call MCP tools': '调用 MCP 工具',
+  'Sends arguments to MCP tools and reads their results.': '向 MCP 工具传递参数并读取结果。',
+  'Declared server/tool pairs in the current session, subject to host policy. Exact tools are not shown here.':
+    '限当前会话中声明的服务与工具组合，并受宿主策略约束。此处不显示具体工具。',
+  'Observe agent events': '观察 Agent 事件',
+  'Receives data from subscribed agent or session events without changing those events.':
+    '接收订阅的 Agent 或会话事件数据，不修改这些事件。',
+  'Declared event subscriptions and the event data the host exposes to them.':
+    '限声明的事件订阅，以及宿主为其提供的事件数据。',
+  'Influence agent events': '干预 Agent 事件',
+  'Intercepts declared events and can affect the agent’s input or tool results where allowed.':
+    '拦截声明的事件，并在获准的情况下影响 Agent 输入或工具结果。',
+  'Declared interceptable events only. Allowed changes depend on the event and host policy.':
+    '限声明的可拦截事件。可修改的内容取决于事件类型和宿主策略。',
+  'Send messages or stop a turn': '发送消息或中止回合',
+  'Can inject a message, trigger a turn, or ask CodeKiln to stop a running session.':
+    '可注入消息、触发回合，或请求 CodeKiln 中止运行中的会话。',
+  'Limited to the originating session unless cross-session access is explicitly allowed. Host session restrictions still apply.':
+    '默认限发起调用的会话，跨会话操作须明确授权，且仍受宿主会话规则约束。',
+  'Run in the background': '在后台运行',
+  'Allows the plugin to stay active or run declared scheduled tasks.':
+    '允许插件常驻或运行声明的定时任务。',
+  'The plugin’s own background process and declared schedules. It does not add file or session permissions.':
+    '限插件自身的后台进程和声明的定时任务，不会新增文件或会话权限。',
+  'Call other plugins': '调用其他插件',
+  'Sends arguments to permitted plugins and receives their results.':
+    '向允许调用的插件传递参数并接收结果。',
+  'Calls are limited to declared peer plugins and methods they expose for inter-plugin use.':
+    '限声明的目标插件，以及对方开放给其他插件调用的方法。',
+  'Write to the clipboard': '写入剪贴板',
+  'Copies text to the system clipboard through the host.': '通过宿主将文本写入系统剪贴板。',
+  'Text writes require a user action; this permission does not grant clipboard reads.':
+    '写入文本需要用户操作；此权限不允许读取剪贴板。',
+  'Open external links': '打开外部链接',
+  'Opens a URL outside CodeKiln through the host.': '通过宿主在 CodeKiln 外部打开链接。',
+  'Requires a user action and a URL accepted by the host.':
+    '需要用户操作，且链接必须通过宿主校验。',
+  'Read project session information': '读取项目会话信息',
+  'Reads session lists and status within the current project.': '读取当前项目的会话列表和状态。',
+  'Project session information exposed by the host. This is not access to arbitrary chat history.':
+    '限宿主提供的项目会话信息，不代表能读取任意聊天记录。',
+  'Read session information across projects': '跨项目读取会话信息',
+  'Reads session lists and status beyond the current project.':
+    '读取当前项目之外的会话列表和状态。',
+  'Sessions exposed by the host across projects. This does not add permission to read conversation transcripts.':
+    '限宿主提供的跨项目会话信息，不会新增读取对话正文的权限。',
+  'Switch between sessions': '切换会话',
+  'Focuses an existing session or opens a related agent view.':
+    '切换到现有会话或打开关联的 Agent 视图。',
+  'A user action is required. The host checks that the target belongs to the current project.':
+    '需要用户操作。宿主会检查目标是否属于当前项目。',
+  'Create sessions': '新建会话',
+  'Creates a session and can provide initial draft text.': '创建会话，并可提供初始草稿文本。',
+  'A user action is required. Any plugin preset used to create the session must belong to this plugin.':
+    '需要用户操作；若创建会话时使用插件预设，只能选此插件自身的预设。',
+  'Run a read-only agent': '运行只读 Agent',
+  'Starts a temporary model run to read or search and receives the result.':
+    '启动临时模型任务以读取或搜索，并接收结果。',
+  'An eligible local session and a read-only tool set. Depending on the request, conversation context may be sent to the model service.':
+    '限符合条件的本机会话和只读工具。根据请求内容，对话上下文可能会发送给模型服务。',
+  'Control the built-in browser': '操作内置浏览器',
+  'Reads or interacts with web pages through CodeKiln’s browser API.':
+    '通过 CodeKiln 浏览器 API 读取网页或与网页交互。',
+  'Declared HTTPS hosts and tabs belonging to an eligible local session. Writes follow session policy; exact hosts are not shown here.':
+    '限声明的 HTTPS 主机和符合条件的本机会话所属标签页。写入遵循会话策略，此处不显示具体主机。',
+  'Back to extensions': '返回扩展',
+  'CodeKiln plugin': 'CodeKiln 插件',
+  'Local folder': '本地文件夹',
+  'ZIP package': 'ZIP 安装包',
+  'HTTPS link': 'HTTPS 链接',
+  'Unknown source': '未知来源',
+  'Screenshot unavailable': '截图无法加载',
+  'Declared host permissions': '声明的宿主 API 权限',
+  Compatibility: '兼容性',
+  'CodeKiln version': 'CodeKiln 版本',
+  Views: '视图',
+  'Included features': '主要功能',
+  'Review update': '预览更新',
+  'Installed version: {{version}}': '已安装版本：{{version}}',
+  'Not installed': '未安装',
+  Official: '官方',
+  Community: '社区',
+  'Local Git worktree': '本机 Git 工作树',
+  'Review update permissions': '审阅更新权限',
+  'Manage plugin': '管理插件',
+  Screenshots: '截图',
+  'Find project knowledge, connect it to source files, and review what changed in your local Git worktree.':
+    '查找本机 Git 项目的知识文档，按源码路径反查，并复核代码变更影响。',
+  'Workflow illustration': '流程示意',
+  'Example project': '示例项目',
+  'Trace a change from code to docs': '从源码变更追踪到相关文档',
+  'Start with a source file': '从源码文件出发',
+  'Find related knowledge': '查找关联文档',
+  'Review the impact of changes': '复核变更影响',
+  'Browse and search': '浏览与检索',
+  'Explore topics, search by concept, and open a document for a plain-text preview.':
+    '按主题浏览、按概念检索，打开文档查看纯文本预览。',
+  'Follow links from code to docs': '按源码路径反查',
+  'Look up related documents by repository-relative source path, or have the agent consult them as references before checking the source.':
+    '用仓库相对路径查找关联文档，也可让 Agent 先查阅文档，再回源码核对。',
+  'Find affected docs, related docs to review, and unmapped source files. Diagnostics do not edit project files.':
+    '区分受影响的文档、需要连带复核的文档和未映射的源码。诊断不会修改项目文件。',
+  'Approve maintenance before changes': '先审批，再维护',
+  'Prepare a draft request for the agent, review a preview before applying edits, and approve Git commits separately.':
+    '为 Agent 准备维护草稿，预览并确认后再应用改动，Git 提交须单独批准。',
+  'How to use': '如何使用',
+  'In a local Code session for a Git project, open Knowledge Map from the right sidebar’s + menu. It detects Node.js 22.13+, Git, and a compatible llmdoc CLI. If only the CLI is missing, choose Install llmdoc.':
+    '在本机 Git 项目的 Code 会话中，从右侧栏「+」菜单打开「知识地图」。它会检测 Node.js 22.13+、Git 和兼容的 llmdoc CLI；如果只缺 CLI，可点击「安装 llmdoc」。',
+  'If the project has no llmdoc/ directory, choose Initialize to prepare an agent request. If it already has docs, browse or search them, or look up a path such as src/auth/session.ts.':
+    '若项目还没有 llmdoc/ 目录，点击「初始化」准备 Agent 请求。若已有文档，可以浏览、检索，也可以用 src/auth/session.ts 等源码路径反查。',
+  'After a code change, check the impact report. Use Review & update to prepare a maintenance request, then review the agent’s proposed changes before approving them.':
+    '修改代码后，查看变更影响报告。点击「复核与更新」准备维护请求，先查看 Agent 提出的变更，再决定是否批准。',
   'No logs yet': '暂无日志',
   'Allow injection into other sessions': '允许向其他会话发送消息',
   'Allow this plugin to send messages to other sessions and trigger execution?':
@@ -250,6 +531,11 @@ export const zhTranslations: Record<string, string> = {
   'Install plugin from folder': '从文件夹安装插件',
   'Install plugin from ZIP': '从 ZIP 安装插件',
   'Install plugin from link': '从链接安装插件',
+  'Drop to install plugin': '松开即可安装插件',
+  'Drop a plugin ZIP or folder. You can review permissions before installing.':
+    '支持插件 ZIP 包或插件文件夹；安装前可以先查看权限。',
+  'Drop one plugin package at a time.': '一次只能拖入一个插件包。',
+  'Could not read the dropped file.': '无法读取拖入的文件。',
   'Enter an HTTPS ZIP link. You will review the plugin and its permissions before installing.':
     '输入 HTTPS ZIP 链接。安装前可以预览插件与权限。',
   'No extensions in this category': '此分类暂无扩展',

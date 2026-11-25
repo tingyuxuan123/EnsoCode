@@ -6,6 +6,7 @@ export function isSubagentPanel(id: string): boolean {
 }
 
 export const FILE_CITATION_PANEL = 'file-citation';
+export const PLUGIN_AUTHORING_PANEL = 'plugin-authoring';
 
 export function isFileCitationPanel(id: string): boolean {
   return id.startsWith(`${FILE_CITATION_PANEL}:`);
@@ -15,13 +16,15 @@ function isTransientPanel(id: string, panel: SerializedDockview['panels'][string
   return (
     isSubagentPanel(id) ||
     isFileCitationPanel(id) ||
+    id === PLUGIN_AUTHORING_PANEL ||
+    panel.contentComponent === PLUGIN_AUTHORING_PANEL ||
     panel.contentComponent === FILE_CITATION_PANEL ||
     panel.contentComponent === 'subagent-session' ||
     panel.contentComponent === 'subagent-directory'
   );
 }
 
-/** Never persist observer panels or approved external file contents. */
+/** Never persist observer panels, approved external file contents, or authoring drafts. */
 export function stripTransientSidePanelLayouts(
   layouts: Record<string, SerializedDockview | undefined>
 ): Record<string, SerializedDockview | undefined> {

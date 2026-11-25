@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createExtensionPluginHandlers,
@@ -27,6 +30,34 @@ const trust = {
   settingsUrl: 'file:///app/renderer/settings.html',
 };
 describe('privileged native plugin IPC', () => {
+  it('only the main window can create a plugin draft, and can only send a session id', async () => {
+    const draft = { id: 'local.example', directory: 'plugin-example' };
+    const create = vi.fn(async () => ({ ok: true as const, draft }));
+    const deps = {
+      trusted: (e: ReturnType<typeof event>) => isTrustedPluginSender(e, trust),
+      authoringTrusted: (e: ReturnType<typeof event>) => e.sender.id === 7,
+      authoring: { create, validate: vi.fn(), stage: vi.fn() },
+      service: () => ({}) as never,
+      pick: vi.fn(),
+      projectRoot: () => null,
+      draft: () => ({}) as never,
+    };
+    const h = createExtensionPluginHandlers(deps);
+    const createDraft = h.createAuthoringDraft;
+    expect(await createDraft(event(8, trust.settingsUrl), 'local-session')).toMatchObject({
+      ok: false,
+    });
+    expect(await createDraft(event(7, trust.mainUrl, true), 'local-session')).toMatchObject({
+      ok: false,
+    });
+    expect(await createDraft(event(), '/tmp/another-folder')).toMatchObject({ ok: false });
+    expect(await createDraft(event(), 'local-session', '/tmp/another-folder')).toMatchObject({
+      ok: false,
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(await createDraft(event(), 'local-session')).toEqual({ ok: true, draft });
+    expect(create).toHaveBeenCalledExactlyOnceWith(7, 'local-session', undefined);
+  });
   it('UI宿主调用只携带Main捕获的代际，拒绝renderer伪造证明', async () => {
     const callUi = vi.fn(async () => null);
     const h = createExtensionPluginHandlers({
@@ -60,7 +91,7 @@ describe('privileged native plugin IPC', () => {
     expect(parseViewStatePatch({ x: '中'.repeat(400_000) })).toBeNull();
     expect(parseViewStatePatch(JSON.parse('{"__proto__":"bad"}'))).toBeNull();
   });
-  it('市场安装与来源重装继续绑定发起窗口，不接收任意磁盘路径', async () => {
+  it('市场安装与来源重装继续绑定发起窗口，不接受 renderer 指定路径', async () => {
     const stage = vi.fn(async () => ({ ok: true }));
     const restage = vi.fn(async () => ({ ok: true }));
     const h = createExtensionPluginHandlers({
@@ -79,6 +110,34 @@ describe('privileged native plugin IPC', () => {
     await h.restage(event(), 'a.b');
     expect(restage).toHaveBeenCalledWith('a.b', 7, undefined);
     expect(await h.restage(event(), '/etc/passwd')).toMatchObject({ ok: false });
+  });
+  it('stagePath 只接受主窗口拖入的真实插件目录或 ZIP，并由 Main 判定来源类型', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'plugin-drop-'));
+    try {
+      const folder = join(dir, 'plugin');
+      const zip = join(dir, 'plugin.zip');
+      const text = join(dir, 'notes.txt');
+      await mkdir(folder);
+      await writeFile(zip, 'zip');
+      await writeFile(text, 'notes');
+      const stage = vi.fn(async () => ({ ok: true }));
+      const h = createExtensionPluginHandlers({
+        trusted: () => true,
+        service: () => ({ stage }) as never,
+        pick: vi.fn(),
+        projectRoot: () => null,
+        draft: () => ({ respond: vi.fn() }) as never,
+      });
+      await h.stagePath(event(), folder);
+      expect(stage).toHaveBeenLastCalledWith({ kind: 'dir', path: folder }, 7, undefined);
+      await h.stagePath(event(), zip);
+      expect(stage).toHaveBeenLastCalledWith({ kind: 'zip', path: zip }, 7, undefined);
+      expect(await h.stagePath(event(), text)).toMatchObject({ ok: false });
+      expect(await h.stagePath(event(), 'plugin.zip')).toMatchObject({ ok: false });
+      expect(stage).toHaveBeenCalledTimes(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
   it('list 透传登记表只读状态与插件数组', async () => {
     const result = { plugins: [], registryError: '只读；备份：registry.corrupt' };

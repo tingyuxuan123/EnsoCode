@@ -6,12 +6,12 @@ import { promisify } from 'node:util';
 import type { Worker } from 'node:worker_threads';
 import { projectDisplayName } from '@shared/projectName';
 import {
-  AGENT_SERVICE_NAME,
   type ChromiumPidKinds,
   chromiumRole,
   commandLabel,
   cpuPercent,
   descendantPids,
+  isAgentWorkerMetric,
   type PsRow,
   parsePs,
   parsePsArgs,
@@ -148,9 +148,7 @@ export async function sampleResources(): Promise<ResourceSnapshot> {
   });
 
   const appPids = new Set(metrics.map((m) => m.pid));
-  const agentPids = metrics
-    .filter((m) => m.serviceName === AGENT_SERVICE_NAME || m.name === AGENT_SERVICE_NAME)
-    .map((m) => m.pid);
+  const agentPids = metrics.filter(isAgentWorkerMetric).map((m) => m.pid);
   const agentTree = descendantPids(rows, agentPids);
   const children = descendantPids(rows, appPids);
   const nextCpu = new Map<number, number>();

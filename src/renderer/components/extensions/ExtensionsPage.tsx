@@ -18,15 +18,13 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type DragEvent as ReactDragEvent, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
 import { LocalAssetImportDialog } from '@/components/settings/LocalAssetImportDialog';
 import { McpEditDialog } from '@/components/settings/McpEditDialog';
-import { PluginMarket } from '@/components/settings/PluginMarket';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -54,7 +52,7 @@ import {
 } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsList, TabsTab } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -66,8 +64,10 @@ import {
 import { PluginIcon } from '@/plugins/PluginIcon';
 import { PluginManagementDetails } from '@/plugins/PluginManagementDetails';
 import { isNativePluginUrl, useNativePluginManager } from '@/plugins/useNativePluginManager';
+import { usePluginMarketCatalog } from '@/plugins/usePluginMarketCatalog';
 import { useMcpStatusStore } from '@/stores/mcpStatus';
 import { useSettingsStore } from '@/stores/settings';
+import { ExtensionShowcase } from './ExtensionShowcase';
 import {
   EXTENSION_KINDS,
   type ExtensionCatalogEntry,
@@ -76,6 +76,8 @@ import {
   mcpExtensionStatus,
   resolveExtensionEmptyState,
 } from './extensionCatalog';
+import { PluginAuthoringDialog } from './PluginAuthoringDialog';
+import { ExtensionMarketActions, PublicExtensionCatalog } from './PublicExtensionCatalog';
 
 const presentation = {
   skill: { label: 'Skills', icon: FileCode2 },
@@ -125,7 +127,7 @@ function EntryIcon({ entry, className }: { entry: Entry; className: string }) {
       <PluginIcon
         pluginId={entry.plugin.id}
         icon={entry.plugin.icon}
-        className={cn(className, 'object-contain')}
+        className={cn(className, 'size-8 object-contain')}
       />
     );
   const Icon = presentation[entry.kind].icon;
@@ -140,7 +142,7 @@ function ExtensionItem({ entry, onOpen }: { entry: Entry; onOpen: () => void }) 
       data-slot="extension-item"
       data-kind={entry.kind}
       onClick={onOpen}
-      className="group flex min-h-[86px] min-w-0 items-start gap-3 rounded-lg p-2.5 text-left transition-colors hover:bg-accent/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex min-w-0 items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-accent/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
     >
       <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground/80">
         <EntryIcon entry={entry} className="size-5" />
@@ -155,10 +157,10 @@ function ExtensionItem({ entry, onOpen }: { entry: Entry; onOpen: () => void }) 
             className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
           />
         </span>
-        <span className="mt-1 block truncate text-muted-foreground text-xs">
+        <span className="mt-0.5 block truncate text-muted-foreground text-xs">
           {entry.description || t(presentation[entry.kind].label)}
         </span>
-        <span className="mt-1.5 flex min-w-0 items-center gap-2 text-muted-foreground text-xs">
+        <span className="mt-1 flex min-w-0 items-center gap-2 text-muted-foreground text-xs">
           <span className="shrink-0 truncate" title={t(entry.source)}>
             {entry.version || t(entry.source)}
           </span>
@@ -182,8 +184,7 @@ export function ExtensionsPage({
   onBack: () => void;
   request?: ExtensionPageRequest;
 }) {
-  const { t, locale } = useI18n();
-  const authorGuideTitle = locale === 'zh' ? '开发自己的插件' : 'Build your own plugin';
+  const { t } = useI18n();
   const native = useNativePluginManager();
   const skills = useSettingsStore((state) => state.skills);
   const mcpServers = useSettingsStore((state) => state.mcpServers);
@@ -207,12 +208,25 @@ export function ExtensionsPage({
   const [urlOpen, setUrlOpen] = useState(false);
   const [authorGuideOpen, setAuthorGuideOpen] = useState(false);
   const [url, setUrl] = useState('');
-  const [marketOpen, setMarketOpen] = useState(false);
+  const [scope, setScope] = useState<'public' | 'mine'>('public');
+  const [showcase, setShowcase] = useState<{
+    kind: 'market' | 'installed';
+    id: string;
+    open: boolean;
+    ready: boolean;
+  } | null>(null);
+  const marketOpen = scope === 'public';
+  const market = usePluginMarketCatalog(marketOpen);
   const [syncNotice, setSyncNotice] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
   const pluginAutoUpdate = useSettingsStore((state) => state.pluginAutoUpdate);
   const setPluginAutoUpdate = useSettingsStore((state) => state.setPluginAutoUpdate);
   const consumedRequest = useRef<number | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const showcaseTrigger = useRef<HTMLElement | null>(null);
+  const showcaseClose = useRef<HTMLButtonElement>(null);
+  const dropDepth = useRef(0);
+  const canDrop = native.canManage && !native.busy;
 
   const changeSkillEnabled = (id: string, enabled: boolean) => {
     updateSkill(id, { enabled });
@@ -221,6 +235,48 @@ export function ExtensionsPage({
   const changeMcpEnabled = (id: string, enabled: boolean) => {
     updateMcp(id, { enabled });
     setSyncNotice(true);
+  };
+
+  const hasDroppedFiles = (event: ReactDragEvent) => event.dataTransfer.types.includes('Files');
+
+  const handleDragEnter = (event: ReactDragEvent) => {
+    if (!hasDroppedFiles(event)) return;
+    event.preventDefault();
+    if (!canDrop) return;
+    dropDepth.current += 1;
+    setDropActive(true);
+  };
+
+  const handleDragOver = (event: ReactDragEvent) => {
+    if (!hasDroppedFiles(event)) return;
+    event.preventDefault();
+    if (canDrop) event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDragLeave = () => {
+    if (dropDepth.current === 0) return;
+    dropDepth.current = Math.max(0, dropDepth.current - 1);
+    if (dropDepth.current === 0) setDropActive(false);
+  };
+
+  const handleDrop = (event: ReactDragEvent) => {
+    if (!hasDroppedFiles(event)) return;
+    event.preventDefault();
+    dropDepth.current = 0;
+    setDropActive(false);
+    if (!canDrop) return;
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length !== 1) {
+      addToast({
+        type: 'error',
+        title:
+          files.length === 0
+            ? t('Could not read the dropped file.')
+            : t('Drop one plugin package at a time.'),
+      });
+      return;
+    }
+    void native.stageFile(files[0]);
   };
 
   useEffect(() => useMcpStatusStore.getState().bind(), []);
@@ -239,7 +295,10 @@ export function ExtensionsPage({
     consumedRequest.current = request.serial;
     setQuery('');
     setFilter('plugin');
-    if (request.pluginId) setMarketOpen(false);
+    if (request.pluginId) {
+      setScope('mine');
+      setShowcase(null);
+    }
     if (request.pluginInstallUrl) {
       void native.stage('url', request.pluginInstallUrl);
     } else if (
@@ -330,144 +389,211 @@ export function ExtensionsPage({
   const selectedMcpStatus =
     selectedMcp && (mcpStatuses[selectedMcp.id] ?? mcpStatuses[selectedMcp.name]);
 
+  const marketPlugin =
+    showcase?.kind === 'market' && market.plugins.find((entry) => entry.id === showcase.id);
+  const installedPlugin =
+    showcase?.kind === 'installed' && native.plugins.find((entry) => entry.id === showcase.id);
+  const showcaseEntry = marketPlugin
+    ? ({ kind: 'market', plugin: marketPlugin } as const)
+    : installedPlugin
+      ? ({ kind: 'installed', plugin: installedPlugin } as const)
+      : null;
+
+  const openShowcase = (kind: 'market' | 'installed', id: string) => {
+    const focused = document.activeElement;
+    showcaseTrigger.current = focused instanceof HTMLElement ? focused : null;
+    closeDetail();
+    setShowcase({ kind, id, open: true, ready: false });
+  };
+
+  const closeShowcase = () => setShowcase((value) => (value ? { ...value, open: false } : null));
+
+  const manageInstalled = (id: string) => {
+    if (!native.plugins.some((entry) => entry.id === id)) return;
+    showcaseTrigger.current = null;
+    setScope('mine');
+    closeShowcase();
+    setSelection(`plugin:${id}`);
+  };
+
+  const addExtension = (
+    <Menu>
+      <MenuTrigger render={<Button size="sm" variant="outline" />}>
+        <Plus />
+        {t('Add extension')}
+        <ChevronDown className="size-3.5" />
+      </MenuTrigger>
+      <MenuPopup align="end" className="w-max">
+        <MenuItem
+          data-install-source="dir"
+          disabled={installDisabled}
+          onClick={() => void native.stage('dir')}
+        >
+          <FolderOpen />
+          {t('Install plugin from folder')}
+        </MenuItem>
+        <MenuItem
+          data-install-source="zip"
+          disabled={installDisabled}
+          onClick={() => void native.stage('zip')}
+        >
+          <FileArchive />
+          {t('Install plugin from ZIP')}
+        </MenuItem>
+        <MenuItem
+          data-install-source="url"
+          disabled={installDisabled}
+          onClick={() => {
+            setUrl('');
+            setUrlOpen(true);
+          }}
+        >
+          <Link2 />
+          {t('Install plugin from link')}
+        </MenuItem>
+        <MenuItem onClick={() => setAuthorGuideOpen(true)}>
+          <FileCode2 />
+          {t('Build your own plugin')}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem onClick={() => setAssetImport('skill')}>
+          <HardDriveDownload />
+          {t('Import skills from local apps')}
+        </MenuItem>
+        <MenuItem onClick={() => setMcpEdit('new')}>
+          <Plug />
+          {t('Add MCP server')}
+        </MenuItem>
+        <MenuItem onClick={() => setAssetImport('mcp')}>
+          <HardDriveDownload />
+          {t('Import MCP servers')}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+
   return (
     <main
       data-slot="extensions-page"
-      className="@container flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel"
+      className="relative @container flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
-      {/* 标题与顶部操作常驻滚动区之外，窄宽时自行换行；正文只有下面这一个纵向滚动区。 */}
-      <div
-        data-slot="extensions-header"
-        className="shrink-0 border-line border-b bg-panel pt-5 pb-3"
-      >
-        <div className="mx-auto w-full max-w-[1104px] px-5 sm:px-8">
-          <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-            <div className="min-w-0 grow basis-[calc(240rem/14)]">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-2 mb-1.5 text-muted-foreground"
-                onClick={onBack}
-              >
-                <ArrowLeft />
-                {t('Back to conversation')}
-              </Button>
-              <h1 className="font-semibold text-[calc(24rem/14)] tracking-tight">
-                {t('Extensions')}
-              </h1>
-              <p className="mt-1 text-muted-foreground text-sm">
-                {t('Manage your skills, MCP connections, and installed plugins.')}
-              </p>
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-              <Menu>
-                <MenuTrigger render={<Button size="sm" />}>
-                  <Plus />
-                  {t('Add extension')}
-                  <ChevronDown className="size-3.5" />
-                </MenuTrigger>
-                <MenuPopup align="end" className="w-max">
-                  <MenuItem
-                    data-install-source="dir"
-                    disabled={installDisabled}
-                    onClick={() => void native.stage('dir')}
-                  >
-                    <FolderOpen />
-                    {t('Install plugin from folder')}
-                  </MenuItem>
-                  <MenuItem
-                    data-install-source="zip"
-                    disabled={installDisabled}
-                    onClick={() => void native.stage('zip')}
-                  >
-                    <FileArchive />
-                    {t('Install plugin from ZIP')}
-                  </MenuItem>
-                  <MenuItem
-                    data-install-source="url"
-                    disabled={installDisabled}
-                    onClick={() => {
-                      setUrl('');
-                      setUrlOpen(true);
-                    }}
-                  >
-                    <Link2 />
-                    {t('Install plugin from link')}
-                  </MenuItem>
-                  <MenuItem onClick={() => setAuthorGuideOpen(true)}>
-                    <FileCode2 />
-                    {authorGuideTitle}
-                  </MenuItem>
-                  <MenuSeparator />
-                  <MenuItem onClick={() => setAssetImport('skill')}>
-                    <HardDriveDownload />
-                    {t('Import skills from local apps')}
-                  </MenuItem>
-                  <MenuItem onClick={() => setMcpEdit('new')}>
-                    <Plug />
-                    {t('Add MCP server')}
-                  </MenuItem>
-                  <MenuItem onClick={() => setAssetImport('mcp')}>
-                    <HardDriveDownload />
-                    {t('Import MCP servers')}
-                  </MenuItem>
-                </MenuPopup>
-              </Menu>
-              <Button
-                size="sm"
-                variant={marketOpen ? 'secondary' : 'outline'}
-                onClick={() => setMarketOpen((open) => !open)}
-              >
-                {t(marketOpen ? 'Back to installed' : 'Browse plugin market')}
-              </Button>
-              <Menu>
-                <MenuTrigger
-                  render={
-                    <Button
-                      size="icon-sm"
-                      variant="outline"
-                      aria-label={t('More extension actions')}
-                    />
-                  }
-                >
-                  <MoreHorizontal />
-                </MenuTrigger>
-                <MenuPopup align="end">
-                  <MenuItem
-                    disabled={!native.canManage || !!native.busy}
-                    onClick={() => void native.checkUpdates()}
-                  >
-                    <RefreshCw />
-                    {t('Check plugin updates')}
-                  </MenuItem>
-                  <MenuCheckboxItem
-                    checked={pluginAutoUpdate}
-                    onCheckedChange={setPluginAutoUpdate}
-                  >
-                    {t('Automatically update plugins')}
-                  </MenuCheckboxItem>
-                </MenuPopup>
-              </Menu>
-            </div>
-          </header>
+      {dropActive && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-panel/80 p-6 backdrop-blur-sm">
+          <div className="flex max-w-md flex-col items-center gap-2 rounded-xl border-2 border-brand/60 border-dashed bg-card/95 px-8 py-10 text-center shadow-float">
+            <FileArchive className="size-8 text-brand" />
+            <p className="font-medium">{t('Drop to install plugin')}</p>
+            <p className="text-muted-foreground text-sm">
+              {t('Drop a plugin ZIP or folder. You can review permissions before installing.')}
+            </p>
+          </div>
         </div>
-      </div>
-      <div
-        ref={contentRef}
-        data-slot="extensions-content"
-        className="min-h-0 flex-1 overflow-y-auto"
+      )}
+      <Tabs
+        value={scope}
+        onValueChange={(value) => {
+          if (value === 'mine' || value === 'public') setScope(value);
+        }}
+        className="min-h-0 flex-1 gap-0"
       >
-        <div className="mx-auto w-full max-w-[1104px] space-y-4 px-5 py-5 sm:px-8">
+        {/* 标题与范围切换独立于滚动；打开抽屉时目录保持原位。 */}
+        <div data-slot="extensions-header" className="shrink-0 bg-panel pt-5 pb-2">
+          <div className="mx-auto w-full max-w-[1016px] px-5 sm:px-8">
+            <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="-ml-1.5 text-muted-foreground"
+                  onClick={onBack}
+                  aria-label={t('Back to conversation')}
+                  title={t('Back to conversation')}
+                >
+                  <ArrowLeft />
+                </Button>
+                <h1 className="font-semibold text-[calc(26rem/14)] tracking-tight">
+                  {t('Extensions')}
+                </h1>
+              </div>
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {marketOpen ? (
+                  <ExtensionMarketActions market={market} />
+                ) : (
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <Button
+                          size="icon-sm"
+                          variant="outline"
+                          aria-label={t('More extension actions')}
+                        />
+                      }
+                    >
+                      <MoreHorizontal />
+                    </MenuTrigger>
+                    <MenuPopup align="end">
+                      <MenuItem
+                        disabled={!native.canManage || !!native.busy}
+                        onClick={() => void native.checkUpdates()}
+                      >
+                        <RefreshCw />
+                        {t('Check plugin updates')}
+                      </MenuItem>
+                      <MenuCheckboxItem
+                        checked={pluginAutoUpdate}
+                        onCheckedChange={setPluginAutoUpdate}
+                      >
+                        {t('Automatically update plugins')}
+                      </MenuCheckboxItem>
+                    </MenuPopup>
+                  </Menu>
+                )}
+                <TabsList aria-label={t('Extension scope')}>
+                  <TabsTab value="public" data-extension-scope="public">
+                    {t('Public')}
+                  </TabsTab>
+                  <TabsTab value="mine" data-extension-scope="mine">
+                    {t('My extensions')}
+                  </TabsTab>
+                </TabsList>
+              </div>
+            </header>
+          </div>
+        </div>
+        <div
+          ref={contentRef}
+          data-slot="extensions-content"
+          className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]"
+        >
           {/* 市场与管理是互斥视图；插件操作的失败提示两者都要可见，所以留在切换之外。 */}
           {native.error && (
-            <p role="alert" className="break-words text-destructive text-sm">
+            <p
+              role="alert"
+              className="mx-auto w-full max-w-[1016px] break-words px-5 pt-3 text-destructive text-sm sm:px-8"
+            >
               {native.error}
             </p>
           )}
           {marketOpen ? (
-            <PluginMarket manager={native} />
+            <TabsPanel
+              value="public"
+              className="mx-auto w-full max-w-[1016px] px-5 pt-4 pb-8 sm:px-8"
+            >
+              <PublicExtensionCatalog
+                manager={native}
+                market={market}
+                addAction={addExtension}
+                onOpen={(id) => openShowcase('market', id)}
+              />
+            </TabsPanel>
           ) : (
-            <>
+            <TabsPanel
+              value="mine"
+              className="mx-auto w-full max-w-[1016px] space-y-5 px-5 pt-4 pb-8 sm:px-8"
+            >
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative min-w-[180px] max-w-[280px] flex-1">
                   <Search className="pointer-events-none absolute top-1/2 left-2.5 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -509,6 +635,7 @@ export function ExtensionsPage({
                     <TabsTab value="plugin">{t('Plugins')}</TabsTab>
                   </TabsList>
                 </Tabs>
+                <div className="ml-auto">{addExtension}</div>
               </div>
               {syncNotice && (
                 <div
@@ -544,12 +671,15 @@ export function ExtensionsPage({
                             {entries.length}
                           </span>
                         </div>
-                        <div className="-mx-2.5 mt-2 grid gap-x-4 gap-y-1 @min-[540px]:grid-cols-2 @min-[860px]:grid-cols-3">
+                        <div className="-mx-2 mt-2 grid gap-x-5 gap-y-1 @min-[570px]:grid-cols-2">
                           {entries.map((entry) => (
                             <ExtensionItem
                               key={entryKey(entry)}
                               entry={entry}
-                              onOpen={() => setSelection(entryKey(entry))}
+                              onOpen={() => {
+                                if ('plugin' in entry) openShowcase('installed', entry.plugin.id);
+                                else setSelection(entryKey(entry));
+                              }}
                             />
                           ))}
                         </div>
@@ -626,10 +756,68 @@ export function ExtensionsPage({
                       </div>
                     </div>
                   )}
-            </>
+            </TabsPanel>
           )}
         </div>
-      </div>
+      </Tabs>
+
+      <Sheet
+        open={!!showcaseEntry && !!showcase?.open}
+        onOpenChange={(open) => {
+          if (!open) closeShowcase();
+        }}
+        onOpenChangeComplete={(open) => {
+          // The header/actions can slide immediately; don't parse a fast README mid-transition.
+          if (open)
+            setShowcase((value) =>
+              value?.open && !value.ready ? { ...value, ready: true } : value
+            );
+        }}
+      >
+        {showcaseEntry && (
+          <SheetPopup
+            data-extension-detail-drawer=""
+            showCloseButton={false}
+            initialFocus={showcaseClose}
+            finalFocus={() =>
+              showcaseTrigger.current?.isConnected ? showcaseTrigger.current : false
+            }
+            // A single translated layer and a flat scrim avoid live backdrop filtering behind the moving sheet.
+            backdropClassName="bg-background/50 backdrop-filter-none motion-reduce:transition-none dark:bg-background/40"
+            className="no-drag relative h-full w-full max-w-none overflow-hidden rounded-s-[16px] bg-popover transition-[translate] duration-(--duration-fast) [transition-timing-function:var(--ease-smooth-out)] will-change-[translate] data-ending-style:translate-x-full data-ending-style:opacity-100 data-ending-style:duration-(--duration-quick) data-starting-style:translate-x-full data-starting-style:opacity-100 motion-reduce:transition-none min-[720px]:w-[clamp(560px,60vw,1200px)]"
+          >
+            <SheetTitle render={<span />} className="sr-only">
+              {showcaseEntry.plugin.name}
+            </SheetTitle>
+            <SheetClose
+              ref={showcaseClose}
+              aria-label={t('Close')}
+              title={t('Close')}
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="absolute end-3 top-3 z-10 bg-panel/85"
+                />
+              }
+            >
+              <X />
+            </SheetClose>
+            <div
+              data-slot="extension-showcase-scroll"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+            >
+              <ExtensionShowcase
+                key={`${showcaseEntry.kind}:${showcaseEntry.plugin.id}`}
+                entry={showcaseEntry}
+                manager={native}
+                documentationReady={!!showcase?.ready}
+                onManageInstalled={manageInstalled}
+              />
+            </div>
+          </SheetPopup>
+        )}
+      </Sheet>
 
       <Sheet
         open={!!selected}
@@ -964,35 +1152,15 @@ export function ExtensionsPage({
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog open={authorGuideOpen} onOpenChange={setAuthorGuideOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{authorGuideTitle}</DialogTitle>
-            <DialogDescription>
-              {locale === 'zh'
-                ? '在CodeKiln源码目录运行以下命令。校验不会执行插件代码。'
-                : 'Run these commands from a CodeKiln source checkout. Validation does not run plugin code.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel>
-            <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-              <code>
-                {
-                  'pnpm plugin:init ./my-plugin --id local.myplugin\npnpm plugin:validate ./my-plugin'
-                }
-              </code>
-            </pre>
-            <p className="mt-3 text-muted-foreground text-sm">
-              {locale === 'zh'
-                ? '校验通过后，从「添加扩展 → 从文件夹安装插件」选择生成的目录，查看权限并确认「安装并启用」；首次安装确认后即启用，之后可随时停用。'
-                : 'After validation, choose Add extension → Install plugin from folder. Review permissions and confirm with Install and enable: a first install is enabled as soon as you confirm, and you can turn it off anytime.'}
-            </p>
-          </DialogPanel>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>{t('Close')}</DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {authorGuideOpen && (
+        <PluginAuthoringDialog
+          onClose={() => setAuthorGuideOpen(false)}
+          onOpenConversation={() => {
+            setAuthorGuideOpen(false);
+            onBack();
+          }}
+        />
+      )}
       <NativePluginFlows manager={native} />
     </main>
   );

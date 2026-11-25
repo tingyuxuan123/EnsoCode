@@ -255,7 +255,11 @@
           }
           page = { method, args, cursor };
           next.hidden = !cursor;
-          status.textContent = count ? `本页 ${count} 篇，共 ${total} 篇。` : '没有匹配文档。';
+          const narrowed = context ? context.narrowed === true : payload.narrowed === true;
+          const limit = context ? context.limit : payload.limit;
+          status.textContent = count
+            ? `本页 ${count} 篇，共 ${total} 篇。${narrowed ? `结果较大，已自动缩小到每页 ${limit} 篇。` : ''}`
+            : '没有匹配文档。';
         });
       }
 

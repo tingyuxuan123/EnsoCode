@@ -844,6 +844,16 @@ export const IPC_PRODUCT_COVERAGE = {
   EXTENSION_PLUGINS_REJECT_PENDING: surfaces('tools.list'),
   EXTENSION_PLUGINS_UNINSTALL: surfaces('tools.list'),
   EXTENSION_PLUGINS_PICK_AND_STAGE: surfaces('tools.list'),
+  EXTENSION_PLUGINS_AUTHORING_CREATE: excluded(
+    'Desktop-only user action writing a starter in a Main-authorized local workspace.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_VALIDATE: excluded(
+    'Desktop-only static validation of a session-owned plugin draft.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_STAGE: excluded(
+    'Desktop-only plugin draft permission preview; never commits installation.'
+  ),
+  EXTENSION_PLUGINS_STAGE_PATH: surfaces('tools.list'),
   EXTENSION_PLUGINS_STAGE_URL: surfaces('tools.list'),
   EXTENSION_PLUGINS_CALL: excluded('Runtime plugin UI call from the trusted renderer.'),
   EXTENSION_PLUGINS_ASSET: excluded('Runtime plugin asset fetch from the trusted renderer.'),

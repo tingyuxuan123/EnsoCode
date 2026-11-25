@@ -64,16 +64,18 @@ function SheetPopup({
   showCloseButton = true,
   side = 'right',
   inset = false,
+  backdropClassName,
   ...props
 }: SheetPrimitive.Popup.Props & {
   showCloseButton?: boolean;
   side?: 'right' | 'left' | 'top' | 'bottom';
   inset?: boolean;
+  backdropClassName?: string;
 }) {
   return (
     <SheetPortal>
       <OverlayGuardHost />
-      <SheetBackdrop />
+      <SheetBackdrop className={backdropClassName} />
       <SheetViewport inset={inset} side={side}>
         <SheetPrimitive.Popup
           className={cn(

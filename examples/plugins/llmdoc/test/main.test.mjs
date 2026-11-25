@@ -57,12 +57,17 @@ if (command === 'tree') {
   result = { root: 'llmdoc', documents: [entry], pagination };
 } else if (command === 'search') {
   const query = args.at(-1);
-  assert.deepEqual(args, ['--json', '--limit', '12', '--budget', '1400', 'search', '--', query]);
+  assert.equal(args[0], '--json');
+  assert.equal(args[1], '--limit');
+  assert.ok(['1', '3', '6', '12'].includes(args[2]));
+  assert.deepEqual(args.slice(3), ['--budget', '1400', 'search', '--', query]);
   assert.throws(() => mkdirSync('.llmdoc-tmp', { recursive: true }), { code: 'ERR_ACCESS_DENIED' });
   assert.throws(() => writeFileSync('.llmdoc-tmp/cache/search-index.json', 'replace'), { code: 'ERR_ACCESS_DENIED' });
   assert.throws(() => spawnSync('do-not-launch'), { code: 'ERR_ACCESS_DENIED' });
   if (query === 'timeout') await new Promise((resolve) => setTimeout(resolve, 30000));
   if (query === 'invalid json') { console.log('not json'); process.exit(0); }
+  if (query === 'huge page' && Number(args[args.indexOf('--limit') + 1]) > 1)
+    process.stdout.write('a'.repeat(200000));
   if (query === 'overflow') process.stdout.write('a'.repeat(200000));
   if (query === 'failure') { console.log('The document was unavailable'); process.exit(2); }
   if (query === 'bad output id') entry.path = 'llmdoc/../../secret.mdx';
@@ -221,6 +226,14 @@ test('agent_end appends a review reminder from the read-only status check', asyn
   assert.equal(await readFile(join(projectRoot, id), 'utf8'), markdown);
 });
 
+test('treats placeholder cursors as the first page instead of failing the CLI', async (t) => {
+  const { tools, context } = await fixture(t);
+  for (const cursor of ['0', '1', '', 'null', 'undefined']) {
+    const result = await tools.get('search')({ query: 'fixture', cursor }, context);
+    assert.equal(JSON.parse(result.content).entries[0].snippet, 'fixture');
+  }
+});
+
 test('search treats a query as one literal argv item and cannot make or update the upstream cache', async (t) => {
   const { methods, projectRoot, context } = await fixture(t);
   const cache = join(projectRoot, '.llmdoc-tmp', 'cache', 'search-index.json');
@@ -313,6 +326,15 @@ test('reports CLI failures, invalid protocol and overflowing stdout without retu
   await assert.rejects(search({ query: 'invalid json' }, context), /JSON/);
   await assert.rejects(search({ query: 'bad output id' }, context), /文档 ID/);
   await assert.rejects(search({ query: 'overflow' }, context), /输出超过/);
+});
+
+test('a list query over the byte budget narrows itself instead of returning no page', async (t) => {
+  const { methods, context } = await fixture(t);
+  const result = await methods.get('search')({ query: 'huge page' }, context);
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].id, id);
+  assert.equal(result.narrowed, true);
+  assert.equal(result.limit, 1);
 });
 
 test('times out a hung subprocess and handles invocation cancellation', async (t) => {

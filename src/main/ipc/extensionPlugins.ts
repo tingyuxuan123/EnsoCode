@@ -1,6 +1,6 @@
-import { readFileSync, statSync } from 'node:fs';
+import { lstatSync, readFileSync, statSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { extname, isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type {
   ExtensionPluginInstallPreview,
@@ -9,6 +9,7 @@ import type {
 import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, dialog, ipcMain, webContents } from 'electron';
 import type { DraftBroker } from '../services/extensionPlugins/draftBroker';
+import { PluginAuthoring } from '../services/extensionPlugins/pluginAuthoring';
 import type { ExtensionPluginService, UiCallMethod } from '../services/extensionPlugins/service';
 import { setPluginAssetResolver } from '../services/localImageProtocol';
 import { getWindowWebContents, sendToAllWindows } from '../windows/createAppWindow';
@@ -53,6 +54,8 @@ const record = (v: unknown): v is Record<string, unknown> =>
 const id = (v: unknown): v is string =>
   typeof v === 'string' && v.length <= 40 && /^[a-z][a-z0-9]*(\.[a-z0-9]+)+$/.test(v);
 const token = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 128;
+const authoringSessionId = (v: unknown): v is string =>
+  typeof v === 'string' && /^[A-Za-z0-9-]{1,128}$/.test(v);
 const methods = ['command.run', 'trigger.candidates', 'trigger.pick', 'renderer.call'] as const;
 const CONFIG_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 const safeKey = (key: string) => !['__proto__', 'constructor', 'prototype'].includes(key);
@@ -112,6 +115,8 @@ const mime: Record<string, string> = {
 type Handler = (event: PluginSenderEvent, ...args: unknown[]) => unknown;
 interface HandlerDeps {
   trusted(event: PluginSenderEvent): boolean;
+  authoringTrusted?(event: PluginSenderEvent): boolean;
+  authoring?: Pick<PluginAuthoring, 'create' | 'validate' | 'stage'>;
   /**
    * 只读插件摘要/素材的额外发送方：协作看板、独立设计窗口等跟随应用外观的应用窗口
    * 也要读插件调色板（`list` + `asset`）。管理、安装、调用类通道一律不走这条路径。
@@ -157,6 +162,8 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
       }
     };
   const invalid = { ok: false, error: '参数不合法' };
+  const forAuthoring = (handler: Handler): Handler =>
+    guard((event, ...args) => (deps.authoringTrusted?.(event) ? handler(event, ...args) : deny));
   return {
     list: guard(() => deps.service().list(), true),
     registryNotice: guard(() => deps.service().registryNotice()),
@@ -259,6 +266,21 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
       const path = await deps.pickPath(e, kind);
       return deps.trusted(e) ? { ok: true, path } : deny;
     }),
+    createAuthoringDraft: forAuthoring((e, sessionId, ...extra) =>
+      deps.authoring && authoringSessionId(sessionId) && !extra.length
+        ? deps.authoring.create(e.sender.id, sessionId, deps.signal?.(e))
+        : invalid
+    ),
+    validateAuthoringDraft: forAuthoring((e, sessionId, pluginId, ...extra) =>
+      deps.authoring && authoringSessionId(sessionId) && id(pluginId) && !extra.length
+        ? deps.authoring.validate(e.sender.id, sessionId, pluginId, deps.signal?.(e))
+        : invalid
+    ),
+    stageAuthoringDraft: forAuthoring((e, sessionId, pluginId, ...extra) =>
+      deps.authoring && authoringSessionId(sessionId) && id(pluginId) && !extra.length
+        ? deps.authoring.stage(e.sender.id, sessionId, pluginId, deps.service(), deps.signal?.(e))
+        : invalid
+    ),
     pickAndStage: guard(async (e, kind) => {
       if (kind !== 'dir' && kind !== 'zip') return invalid;
       const picked = await deps.pick(e, kind);
@@ -267,6 +289,30 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
       return deps
         .service()
         .stage({ kind, path: picked.filePaths[0] }, e.sender.id, deps.signal?.(e));
+    }),
+    stagePath: guard(async (e, value) => {
+      if (
+        typeof value !== 'string' ||
+        value.length > 4096 ||
+        !isAbsolute(value) ||
+        /[\p{Cc}\p{Cf}]/u.test(value)
+      )
+        return invalid;
+      let info: ReturnType<typeof lstatSync>;
+      try {
+        info = lstatSync(value);
+      } catch {
+        return { ok: false, error: '拖入的文件或文件夹不可读。' };
+      }
+      if (info.isSymbolicLink())
+        return { ok: false, error: '不支持符号链接，请拖入实际插件目录或 ZIP 文件。' };
+      const kind = info.isDirectory()
+        ? 'dir'
+        : info.isFile() && /\.zip$/i.test(value)
+          ? 'zip'
+          : null;
+      if (!kind) return { ok: false, error: '只能安装插件目录或 ZIP 插件包。' };
+      return deps.service().stage({ kind, path: value }, e.sender.id, deps.signal?.(e));
     }),
     stageUrl: guard((e, url) =>
       typeof url === 'string' && url.length <= 2048
@@ -371,6 +417,10 @@ export function registerExtensionPluginHandlers(): void {
       settingsUrl: expected('settings'),
     });
   };
+  const isMainAuthoringWindow = (event: PluginSenderEvent) => {
+    const main = getMainWindow();
+    return !!main && !main.isDestroyed() && getWindowWebContents(main).id === event.sender.id;
+  };
   /**
    * 跟随应用外观的应用窗口（协作看板、独立设计窗口）只多读 `list` / `asset`：
    * 发送方必须是 Main 权威登记的那个窗口、顶层 frame，且停留在自己的入口文档。
@@ -402,8 +452,12 @@ export function registerExtensionPluginHandlers(): void {
     (handlers ??= Promise.all([import('../services/extensionPlugins'), import('./agent')]).then(
       ([
         { getExtensionPlugins, getDraftBroker },
-        { pluginProjectRoot, pluginSessionGeneration },
+        { pluginAuthoringWorkspace, pluginProjectRoot, pluginSessionGeneration },
       ]) => {
+        const authoring = new PluginAuthoring({
+          workspace: pluginAuthoringWorkspace,
+          hostVersion: app.getVersion(),
+        });
         setPluginAssetResolver((id, rel) => getExtensionPlugins().assetMediaPath(id, rel));
         getExtensionPlugins().onChange(() =>
           sendToAllWindows(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED)
@@ -414,9 +468,12 @@ export function registerExtensionPluginHandlers(): void {
         releaseOwner = (id) => {
           getExtensionPlugins().releaseOwner(id);
           getDraftBroker().releaseOwner(id);
+          authoring.releaseOwner(id);
         };
         return createExtensionPluginHandlers({
           trusted,
+          authoring,
+          authoringTrusted: isMainAuthoringWindow,
           readTrusted,
           service: getExtensionPlugins,
           draft: getDraftBroker,
@@ -477,7 +534,11 @@ export function registerExtensionPluginHandlers(): void {
     [IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_STATE_GET, 'viewStateGet'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_VIEW_STATE_SET, 'viewStateSet'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_PICK_PATH, 'pickPath'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CREATE, 'createAuthoringDraft'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_VALIDATE, 'validateAuthoringDraft'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_STAGE, 'stageAuthoringDraft'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_PICK_AND_STAGE, 'pickAndStage'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_PATH, 'stagePath'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_URL, 'stageUrl'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_COMMIT, 'commit'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_DISCARD, 'discard'],
@@ -499,7 +560,13 @@ export function registerExtensionPluginHandlers(): void {
   ]);
   for (const [channel, key] of channels)
     ipcMain.handle(channel, async (event, ...args: unknown[]) => {
-      const allowed = trusted(event) || (readOnlyChannels.has(channel) && readTrusted(event));
+      const authoring =
+        key === 'createAuthoringDraft' ||
+        key === 'validateAuthoringDraft' ||
+        key === 'stageAuthoringDraft';
+      const allowed = authoring
+        ? trusted(event) && isMainAuthoringWindow(event)
+        : trusted(event) || (readOnlyChannels.has(channel) && readTrusted(event));
       if (!allowed)
         return { ok: false, error: '仅可信本地桌面可调用插件', code: 'PERMISSION_DENIED' };
       try {

@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', async (original) => ({
   ...(await original<object>()),
-  app: { on: mocks.on, isPackaged: false },
+  app: { on: mocks.on, isPackaged: false, getVersion: () => '0.2.104' },
   ipcMain: { handle: mocks.handle },
   webContents: { getAllWebContents: mocks.all, fromId: () => null },
 }));
@@ -43,7 +43,11 @@ vi.mock('../services/extensionPlugins', () => ({
   getExtensionPlugins: () => mocks.service(),
   getDraftBroker: () => mocks.draft(),
 }));
-vi.mock('./agent', () => ({ pluginProjectRoot: () => null, pluginSessionGeneration: () => null }));
+vi.mock('./agent', () => ({
+  pluginAuthoringWorkspace: () => null,
+  pluginProjectRoot: () => null,
+  pluginSessionGeneration: () => null,
+}));
 
 type Handler = (event: unknown, ...args: unknown[]) => Promise<Record<string, unknown>>;
 
@@ -148,5 +152,26 @@ describe('插件 IPC 的只读放行', () => {
     const list = handler(IPC_CHANNELS.EXTENSION_PLUGINS_LIST);
     expect(await list(sender(ids.main, `${ORIGIN}/index.html`))).toEqual({ plugins: [] });
     expect(await list(sender(ids.settings, `${ORIGIN}/settings.html`))).toEqual({ plugins: [] });
+  });
+
+  it('制作通道拒绝设置窗口和设计窗口，不初始化插件服务', async () => {
+    const handler = await registered();
+    for (const channel of [
+      IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CREATE,
+      IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_VALIDATE,
+      IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_STAGE,
+    ]) {
+      for (const [id, page] of [
+        [ids.settings, 'settings'],
+        [ids.design, 'design'],
+      ] as const) {
+        expect(
+          await handler(channel)(sender(id, `${ORIGIN}/${page}.html`), 'session')
+        ).toMatchObject({
+          code: 'PERMISSION_DENIED',
+        });
+      }
+    }
+    expect(mocks.service).not.toHaveBeenCalled();
   });
 });

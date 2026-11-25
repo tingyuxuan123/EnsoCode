@@ -7,6 +7,7 @@ import { disposeDeviceRequests } from './ipc/agent';
 import { consumeTrayReenterAfterUpdate, readSettings } from './ipc/settings';
 import { createPluginInstallInbox } from './protocol/pluginInstall';
 import { agentWorkerAlive, startAgentWorker, stopAgentWorkerForQuit } from './services/agentHost';
+import { recordAgentWorkerGone } from './services/agentWorkerDiagnostics';
 import { installAppMenu } from './services/appMenu';
 import { attachAppQuitDrain } from './services/appQuitDrain';
 import {
@@ -88,6 +89,7 @@ if (!gotTheLock) {
     restoreFromSecondInstance();
   });
   app.on('child-process-gone', (_event, details) => {
+    recordAgentWorkerGone(details);
     console.error(
       `[process] child-process-gone type=${details.type} reason=${details.reason} exitCode=${details.exitCode} serviceName=${details.serviceName ?? ''} name=${details.name ?? ''}`
     );

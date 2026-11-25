@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import {
   AppWindow,
   Bot,
+  FileCode2,
   FolderOpen,
   GitCompare,
   Globe,
@@ -26,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { createContext, type ReactElement, useContext, useEffect, useRef, useState } from 'react';
+import { PluginAuthoringPane } from '@/components/extensions/PluginAuthoringPane';
 import {
   ContextMenu,
   ContextMenuItem,
@@ -49,6 +51,7 @@ import {
   bindSidePanelDock,
   closeSidePanelBrowser,
   disposeConversationResources,
+  type PluginAuthoringPanelParams,
   requestSidePanelTabClose,
   revealMobileDevicesPanel,
   selectWorkflowAvailable,
@@ -67,6 +70,7 @@ import {
   FILE_CITATION_PANEL,
   isFileCitationPanel,
   isSubagentPanel,
+  PLUGIN_AUTHORING_PANEL,
 } from '@/stores/sidePanel/transientPanels';
 import {
   CHAT_MIN_WIDTH,
@@ -405,6 +409,44 @@ function PluginViewPanel(
   ) : null;
 }
 
+function PluginAuthoringPanel({ api, params }: IDockviewPanelProps<PluginAuthoringPanelParams>) {
+  const { conversationId, visible } = useContext(PanelContext);
+  const { t } = useI18n();
+  const projectPath = useSettingsStore(
+    (s) => s.projects.find((project) => project.id === params.projectId)?.path
+  );
+  const current = useSessionsStore((s) => {
+    const session = s.conversations[params.sessionId];
+    return (
+      !!session &&
+      session.projectId === params.projectId &&
+      !session.worktreeMissing &&
+      (session.worktree?.path ?? projectPath) === params.cwd
+    );
+  });
+  const [active, setActive] = useState(api.isActive && api.isVisible);
+  useEffect(() => {
+    const update = () => setActive(api.isActive && api.isVisible);
+    update();
+    const visibility = api.onDidVisibilityChange(update);
+    const activation = api.onDidActiveChange(update);
+    return () => {
+      visibility.dispose();
+      activation.dispose();
+    };
+  }, [api]);
+  if (!visible || !active || params.sessionId !== conversationId) return null;
+  return current ? (
+    <PluginAuthoringPane key={params.id} {...params} />
+  ) : (
+    <p role="status" className="p-5 text-muted-foreground text-sm">
+      {t(
+        'This plugin draft belongs to a different workspace. Open plugin authoring again from Extensions.'
+      )}
+    </p>
+  );
+}
+
 /** 与 CoworkerTabs 同款 chip:圆角、selection 激活、hover 出关闭 */
 function SidePanelTab(
   props: IDockviewPanelHeaderProps<{
@@ -450,6 +492,8 @@ function SidePanelTab(
         <GitCompare className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'files' ? (
         <FolderOpen className="h-3 w-3 shrink-0" />
+      ) : props.api.id === PLUGIN_AUTHORING_PANEL ? (
+        <FileCode2 className="h-3 w-3 shrink-0" />
       ) : isFileCitationPanel(props.api.id) ? (
         <FileTypeIcon name={title} className="h-3 w-3 shrink-0" />
       ) : props.api.id === 'mobile-devices' ? (
@@ -801,6 +845,7 @@ const DOCK_COMPONENTS = {
   changes: ChangesPanel,
   files: FilesPanel,
   [FILE_CITATION_PANEL]: FileCitationView,
+  [PLUGIN_AUTHORING_PANEL]: PluginAuthoringPanel,
   'mobile-devices': MobileDevicesPanel,
   browser: BrowserPanel,
   design: DesignDockPanel,
@@ -886,7 +931,12 @@ function ConversationDock({
     });
     // 只有用户关 tab 才回收;dock 本身不随切会话卸载
     event.api.onDidRemovePanel((panel) => {
-      if (isSubagentPanel(panel.id) || isFileCitationPanel(panel.id)) return;
+      if (
+        isSubagentPanel(panel.id) ||
+        isFileCitationPanel(panel.id) ||
+        panel.id === PLUGIN_AUTHORING_PANEL
+      )
+        return;
       if (
         panel.id === 'changes' ||
         panel.id === 'files' ||

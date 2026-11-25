@@ -117,6 +117,7 @@ import { ENSO_SYSTEM_PROMPT } from '../../agent/ensoPrompt';
 import agentWorkerPath from '../../agent/index?modulePath';
 import { readSettings } from '../ipc/settings';
 import { agentCommandDispatch } from './agentCommandDispatch';
+import { beginAgentWorkerDiagnostics } from './agentWorkerDiagnostics';
 import { BuiltinToolScopes, sessionDisabledTools } from './builtinToolScopes';
 import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
@@ -175,6 +176,7 @@ export type AgentTypeResolution =
 
 /** 管理 agent worker（utilityProcess）的生命周期与命令下发。故障域 A：一个 worker 装全部会话。 */
 let worker: UtilityProcess | null = null;
+const requestedWorkerStops = new WeakSet<UtilityProcess>();
 
 /**
  * worker 每次请求都向 Main 选号。账号成员、启用状态、模型目录和真实 OAuth 存储实时核验，失败原因只影响该账号的有限窗口。
@@ -373,8 +375,9 @@ export function customWorkflowPresetDir(): string {
 
 export function startAgentWorker(): void {
   if (worker) return;
+  const diagnostics = beginAgentWorkerDiagnostics(path.join(app.getPath('userData'), 'logs'));
   const child = utilityProcess.fork(agentWorkerPath, [], {
-    serviceName: 'enso-agent-worker',
+    serviceName: diagnostics.serviceName,
     env: {
       ...process.env,
       ENSO_AGENT_DATA_DIR: agentDataDir(),
@@ -392,6 +395,7 @@ export function startAgentWorker(): void {
   workerExited = false;
 
   child.once('spawn', () => {
+    diagnostics.spawned(child.pid);
     workerReady = true;
     // Canvas state predates the worker and must precede queued session/prompt commands.
     pushDesignCanvasCwds();
@@ -463,7 +467,8 @@ export function startAgentWorker(): void {
       onEvent?.(event);
     }
   });
-  child.on('exit', () => {
+  child.once('exit', (code) => {
+    diagnostics.exited(code, requestedWorkerStops.has(child));
     if (worker && worker !== child) return;
     if (worker === child) {
       worker = null;
@@ -498,7 +503,10 @@ export function stopAgentWorker(): void {
   parentPluginScopes.clear();
   workspaceLocks.failAll('agent worker stopped');
   pluginAgents.failAll('agent worker stopped');
-  worker?.kill();
+  if (worker) {
+    requestedWorkerStops.add(worker);
+    worker.kill();
+  }
   worker = null;
   workerReady = false;
   snapshotPending = false;
@@ -518,6 +526,7 @@ export function stopAgentWorkerForQuit(timeoutMs: number): Promise<void> {
   browserCancellationListener?.();
   const child = worker;
   if (!child) return Promise.resolve();
+  requestedWorkerStops.add(child);
   return killAndWaitExit(child, timeoutMs);
 }
 

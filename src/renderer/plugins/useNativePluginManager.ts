@@ -9,6 +9,7 @@ import { coerceConfigValue } from './configValue';
 
 type PluginApi = Window['electronAPI']['extensionPlugins'];
 type PluginStageKind = 'dir' | 'zip' | 'url' | 'market' | 'restage';
+type PluginStageResult = Awaited<ReturnType<PluginApi['pickAndStage']>>;
 type ConfigDraft = Record<string, string | null>;
 type Config = { pluginId: string; fields: ExtensionPluginConfigField[]; draft: ConfigDraft };
 type OperationResult = {
@@ -172,11 +173,13 @@ export function useNativePluginManager() {
     return current;
   };
 
-  const stage = (kind: PluginStageKind, url = '') =>
-    run(`stage:${kind}`, async (session) => {
-      if (kind === 'url' && !isNativePluginUrl(url)) {
-        throw new Error('Enter a valid HTTPS plugin URL without credentials.');
-      }
+  const stageSource = (
+    key: string,
+    load: (session: Session) => Promise<PluginStageResult>,
+    validate?: () => void
+  ) =>
+    run(key, async (session) => {
+      validate?.();
       const old = takePreview(session);
       const generation = session.previewGeneration;
       if (old) {
@@ -187,14 +190,7 @@ export function useNativePluginManager() {
         }
       }
       if (sessionRef.current !== session || !session.registryWritable) return;
-      const result =
-        kind === 'url'
-          ? await session.api.stageFromUrl(url.trim())
-          : kind === 'market'
-            ? await session.api.marketStage(url)
-            : kind === 'restage'
-              ? await session.api.restage(url)
-              : await session.api.pickAndStage(kind);
+      const result = await load(session);
       requireSuccess(result);
       if (!result.ok || 'cancelled' in result) return;
       if (
@@ -210,6 +206,33 @@ export function useNativePluginManager() {
       session.preview = result.preview;
       setPreview(result.preview);
     });
+
+  const stage = (kind: PluginStageKind, url = '') =>
+    stageSource(
+      `stage:${kind}`,
+      (session) =>
+        kind === 'url'
+          ? session.api.stageFromUrl(url.trim())
+          : kind === 'market'
+            ? session.api.marketStage(url)
+            : kind === 'restage'
+              ? session.api.restage(url)
+              : session.api.pickAndStage(kind),
+      () => {
+        if (kind === 'url' && !isNativePluginUrl(url)) {
+          throw new Error('Enter a valid HTTPS plugin URL without credentials.');
+        }
+      }
+    );
+
+  const stageFile = (file: File) =>
+    stageSource(
+      'stage:file',
+      (session) => session.api.stageFile(file),
+      () => {
+        if (!file) throw new Error('Drop a plugin folder or ZIP file.');
+      }
+    );
 
   const cancelPreview = () =>
     run(
@@ -335,6 +358,9 @@ export function useNativePluginManager() {
     registryError,
     busy,
     stage,
+    stageFile,
+    stageAuthoringDraft: (sessionId: string, pluginId: string) =>
+      stageSource('stage:authoring', ({ api }) => api.stageAuthoringDraft(sessionId, pluginId)),
     checkUpdates: () => mutate('check-updates', ({ api }) => api.checkUpdates()),
     setDevWatch: (pluginId: string, on: boolean) =>
       mutate(`dev:${pluginId}`, ({ api }) => api.setDevWatch(pluginId, on)),

@@ -42,6 +42,11 @@
   worker 回来的事件经 `parseAgentWorkerEvent` 收窄，类型上不给 auth 位置。
 - worker `exit` 时向 Renderer 广播 `worker-exited`（全部会话视为 failed），
   **不自动重启**——重启牵出 jsonl 恢复，是独立一刀。
+- Main 在 `userData/logs/agent-worker-exits.log` 写入退出诊断（JSON Lines，按大小轮转，保留三份）。
+  `exit` 记录启动时缓存的 PID、退出码和是否由应用请求停止；若 Electron 另报
+  `child-process-gone`，同一 `serviceName` 的记录包含原始 `reason` 与 `electronExitCode`。
+  两个事件先后顺序不保证，POSIX 的两个退出码也不一定相同。缺少后者不推断原因；不记录会话、
+  环境变量、命令或原始崩溃报告。每次 fork 的显示名独立，避免迟到事件误记到新 worker。
 - pi 的全局目录与会话目录经 `ENSO_AGENT_DATA_DIR` 指到 `userData/agent/`，
   不碰用户的 `~/.pi`。
 - **代理要在 worker 里单独装 dispatcher**：Node `fetch` 不读 `HTTP_PROXY` env，光把 env

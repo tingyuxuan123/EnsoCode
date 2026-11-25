@@ -223,3 +223,16 @@ export type ExtensionPluginNotice =
   | { kind: 'inject-denied'; pluginId: string; name: string }
   | { kind: 'update-needs-approval'; pluginId: string; name: string; version: string }
   | { kind: 'auto-updated'; pluginId: string; name: string; version: string };
+export interface PluginAuthoringDraft {
+  id: string;
+  /** Directory relative to the session's Main-authorized workspace. */
+  directory: string;
+}
+
+export type PluginAuthoringCreateResult =
+  | { ok: true; draft: PluginAuthoringDraft }
+  | { ok: false; error: string };
+
+export type PluginAuthoringValidationResult =
+  | { ok: true; name: string; version: string; warnings: string[] }
+  | { ok: false; error: string };

@@ -1,3 +1,4 @@
+import type { PluginAuthoringDraft } from '@shared/extensionPlugins/types';
 import { parseMarkdownHttpUrl } from '@shared/markdownLinks';
 import {
   isWorkflowAvailable,
@@ -14,6 +15,7 @@ import {
   FILE_CITATION_PANEL,
   isFileCitationPanel,
   isSubagentPanel,
+  PLUGIN_AUTHORING_PANEL,
 } from '@/stores/sidePanel/transientPanels';
 import { resolveSidePanelDockConversationId } from './sidePanelDockId';
 import { resolveSubagentTarget } from './subagentTargets';
@@ -55,6 +57,14 @@ export function requestSidePanelTabClose(panel: DockviewPanelApi): void {
 type DesignReveal = { conversationId: string; title?: string; width?: number | 'max' };
 const pendingDesignReveal = new Map<string, DesignReveal>();
 const pendingMobileDevices = new Set<string>();
+export type PluginAuthoringPanelParams = PluginAuthoringDraft & {
+  sessionId: string;
+  projectId: string;
+  cwd: string;
+  prompt: string;
+  filled: boolean;
+};
+const pendingPluginAuthoring = new Map<string, PluginAuthoringPanelParams & { title: string }>();
 type PluginViewReveal = { conversationId: string; pluginId: string; viewId: string; title: string };
 const pendingPluginViews = new Map<string, Map<string, PluginViewReveal>>();
 const pendingBrowserReveal: {
@@ -127,6 +137,9 @@ export function bindSidePanelDock(conversationId: string, api: DockviewApi): voi
       openSidePanelFileCitation(conversationId, citationId, file);
     }
     if (pendingMobileDevices.delete(conversationId)) addSidePanelMobileDevices(conversationId);
+    const authoring = pendingPluginAuthoring.get(conversationId);
+    pendingPluginAuthoring.delete(conversationId);
+    if (authoring) addSidePanelPluginAuthoring(authoring);
     const design = pendingDesignReveal.get(conversationId);
     const pluginViews = pendingPluginViews.get(conversationId);
     pendingPluginViews.delete(conversationId);
@@ -421,6 +434,35 @@ export function addSidePanelMobileDevices(conversationId: string): void {
   else pendingMobileDevices.add(conversationId);
 }
 
+export function addSidePanelPluginAuthoring(
+  options: PluginAuthoringPanelParams & { title: string }
+): void {
+  const { sessionId, title, ...draft } = options;
+  const sessions = useSessionsStore.getState();
+  const conversation = sessions.conversations[sessionId];
+  if (
+    !conversation ||
+    conversation.parentId ||
+    conversation.btwParentId ||
+    sessions.activeId !== sessionId
+  )
+    return;
+  useSidePanelStore.getState().ensureOpen(sessionId);
+  const api = docks.get(sessionId);
+  if (!api) {
+    pendingPluginAuthoring.set(sessionId, options);
+    return;
+  }
+  const existing = api.getPanel(PLUGIN_AUTHORING_PANEL);
+  const params = { sessionId, ...draft };
+  if (existing) {
+    existing.api.updateParameters(params);
+    existing.focus();
+  } else {
+    api.addPanel({ id: PLUGIN_AUTHORING_PANEL, component: PLUGIN_AUTHORING_PANEL, title, params });
+  }
+}
+
 export function setSidePanelDesignVisible(conversationId: string, visible: boolean): void {
   if (visible) return; // Availability is not an instruction to steal focus/open.
   const dockId = resolveSidePanelDockConversationId(
@@ -609,6 +651,7 @@ export function closeSidePanelBrowser(conversationId: string, tabId: string): vo
 }
 
 export function disposeConversationResources(conversationId: string): void {
+  pendingPluginAuthoring.delete(conversationId);
   pendingMobileDevices.delete(conversationId);
   const api = docks.get(conversationId);
   docks.delete(conversationId);

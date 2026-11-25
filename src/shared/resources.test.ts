@@ -196,6 +196,15 @@ describe('chromiumRole', () => {
     [{ pid: 4, type: 'Tab' }, 'browser'],
     [{ pid: 8, type: 'Tab' }, 'window'],
     [{ pid: 5, type: 'Utility', serviceName: 'enso-agent-worker' }, 'agent'],
+    [
+      {
+        pid: 5,
+        type: 'Utility',
+        serviceName: 'node.mojom.NodeService',
+        name: 'enso-agent-worker:63322941-f5f7-4c67-9042-e2efe64c03cd',
+      },
+      'agent',
+    ],
     [{ pid: 6, type: 'Utility', serviceName: 'network.mojom.NetworkService' }, 'service'],
     [{ pid: 7, type: 'Zygote' }, 'service'],
   ] as const)('%j -> %s', (metric, role) => {
