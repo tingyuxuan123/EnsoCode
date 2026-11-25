@@ -97,7 +97,7 @@ export function ComposerCommandTray({
       aria-label={label}
       data-slot="composer-command-tray"
       style={maxHeight ? { maxHeight: `min(${maxHeight}px, 488px, 58vh)` } : undefined}
-      className="@container absolute inset-x-0 bottom-[calc(100%+6px)] z-10 flex h-[calc(320rem/14)] max-h-[min(488px,58vh)] min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-float"
+      className="@container absolute inset-x-0 bottom-[calc(100%-1px)] z-10 flex h-[calc(320rem/14)] max-h-[min(488px,58vh)] min-w-0 flex-col overflow-hidden rounded-t-xl border border-b-0 border-brand/60 bg-card text-card-foreground shadow-float"
     >
       {/* 头部：不画分隔线，靠留白分层 */}
       <header className="flex h-[calc(42rem/14)] shrink-0 items-center justify-between gap-3 px-4">
@@ -107,7 +107,7 @@ export function ComposerCommandTray({
             className="size-[calc(14rem/14)] shrink-0 text-muted-foreground"
           />
           <span className="truncate text-[calc(12.5rem/14)] font-semibold">{label}</span>
-          <span className="shrink-0 rounded-[4px] bg-foreground/6 px-1.5 py-px text-[calc(10.5rem/14)] text-muted-foreground tabular-nums">
+          <span className="shrink-0 rounded-[4px] bg-secondary px-1.5 py-px text-[calc(10.5rem/14)] text-muted-foreground tabular-nums">
             {items.length}
           </span>
         </div>
@@ -169,7 +169,7 @@ export function ComposerCommandTray({
                       className={cn(
                         // 选中不整条染色：左侧一根 2px 强调条 + 极淡底，扫读时更容易定位
                         'relative flex h-[calc(30rem/14)] w-full items-center gap-2 rounded-[6px] px-2 text-left',
-                        selected ? 'bg-foreground/6 text-foreground' : 'hover:bg-accent'
+                        selected ? 'bg-selection text-selection-foreground' : 'hover:bg-accent'
                       )}
                     >
                       {selected && (
@@ -201,7 +201,7 @@ export function ComposerCommandTray({
                         </code>
                       )}
                       {tag && (
-                        <span className="hidden shrink-0 rounded-[3px] bg-foreground/6 px-1.5 py-px text-[calc(10rem/14)] text-muted-foreground @min-[600px]:block">
+                        <span className="hidden shrink-0 rounded-[3px] bg-secondary px-1.5 py-px text-[calc(10rem/14)] text-muted-foreground @min-[600px]:block">
                           {tag}
                         </span>
                       )}
@@ -271,8 +271,14 @@ export function ComposerCommandTray({
                 </dl>
               )}
               <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-                <span className="text-[calc(10.5rem/14)] text-muted-foreground/60">
-                  {t('Insert command')}
+                <span className="min-w-0 truncate text-[calc(10.5rem/14)] text-muted-foreground/60">
+                  {parentCommand
+                    ? t('Command options')
+                    : commandGroup(active) === 0
+                      ? t(active.prompt ? 'Capability' : 'Skill')
+                      : commandGroup(active) === 2
+                        ? t('Skill')
+                        : t('Session commands')}
                 </span>
                 <button
                   type="button"
