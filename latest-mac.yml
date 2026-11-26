@@ -1,92 +1,40 @@
-version: 0.2.110
+version: 0.2.111
 files:
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.110/CodeKiln-0.2.110-arm64-mac.zip
-    sha512: bHQ1w1KlJ0YZsO47cBWO9oQRyGpZrwXQcvKW+XS9pgXimMNQNCCCAEIWiMrSZRUp9rImaaXe2swov8Mz76QitQ==
-    size: 191196581
-  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.110/CodeKiln-0.2.110-arm64.dmg
-    sha512: oogPmwnosk6z5zI6ko7yA7Da3f9xwfsK6YURswM6RFfSkYGAKjkgTw5bQohXZjNSbbow/j3BEZWNcZJkpfqzJA==
-    size: 187212532
-path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.110/CodeKiln-0.2.110-arm64-mac.zip
-sha512: bHQ1w1KlJ0YZsO47cBWO9oQRyGpZrwXQcvKW+XS9pgXimMNQNCCCAEIWiMrSZRUp9rImaaXe2swov8Mz76QitQ==
-releaseDate: 2026-11-26T00:48:11.357Z
-releaseName: CodeKiln 0.2.110 — 个人测试
-releaseNotes: >
-  # CodeKiln 0.2.110
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.111/CodeKiln-0.2.111-arm64-mac.zip
+    sha512: FUEjXIHkz+m4tcq8DvBGv+z4R8LaGwowRguo72pFFypcXwj24hApeiood/DhKjrUFr7ZZklfI79nquuD09mqMQ==
+    size: 191228867
+  - url: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.111/CodeKiln-0.2.111-arm64.dmg
+    sha512: AB/Wq15cRbCBVAmPqCJRfXaPS7wDeIHsVp/C8hAHyyg8+tX02PuIO7lXqovUndF/k3pGLPPrV9bUXmVedQYbfA==
+    size: 187282173
+path: https://github.com/tingyuxuan123/EnsoCode/releases/download/personal-v0.2.111/CodeKiln-0.2.111-arm64-mac.zip
+sha512: FUEjXIHkz+m4tcq8DvBGv+z4R8LaGwowRguo72pFFypcXwj24hApeiood/DhKjrUFr7ZZklfI79nquuD09mqMQ==
+releaseDate: 2026-11-26T02:20:58.913Z
+releaseName: CodeKiln 0.2.111 — 个人测试
+releaseNotes: |
+  # CodeKiln 0.2.111
 
+  ## 插件制作
 
-  ## 设计画布
-
-
-  - 恢复通过 Codemode 批量读取、修改或创建设计文件时的“浏览中 / 修改中 / 创作中”动画，保留扫描、流体背景和状态色效果。
-
-  - 运行中重新打开、重载或弹出独立设计窗口后，只恢复尚未完成的活动，不重复播放已完成历史；操作成功后显示“已更新”，读取结束或失败后清理状态。
-
-  - 同一项目中新建或切换会话时，发现已有设计稿只提供画布入口，不再自动展开、抢占聊天面板；主动从画廊、文件树或顶栏打开，以及新建设计，仍正常展开画布。
-
-  - 补丁活动识别兼容工具实际支持的参数形式，避免把补丁正文中的示例误判为另一个目标文件，并沿用工具的输入大小限制。
-
-
-  ## 聊天界面
-
-
-  - 修复工具卡片等容器中放大的图片预览被裁剪的问题，预览改为顶层浮层，保留点击和 Esc 关闭操作。
-
-  - 命令面板改为独立浮层；更新命令与技能托盘的分组列表、详情预览和窄窗口布局，优化项目计数、标签及选中项的主题色表现。
-
-
-  ## 插件工作区
-
-
-  - 原生插件页面可声明出现在最左图标轨，点击后作为独立工作区打开，不再只占右侧标签页。
-
-  - 工作区不创建对话，也不改变当前会话、侧栏宽度或折叠状态；切回 Code 即可继续对话。
-
-  - 停用或卸载插件会立即撤销入口和页面，不会留下空白标签；重新启用后插件自己的数据仍在。
-
-  - 后台会话不能把已打开的工作区改投到另一个项目，页面始终绑定打开它时的上下文。
-
-
-  ## 插件界面跟随主题
-
-
-  - 插件页面不再只有浅色/深色两种标记，而是直接读取当前应用的背景、面板、文字、强调色、边框、圆角和字体、字号。
-
-  - 同一浅色模式下切换强调色、浅色调色板或插件主题也会立即同步，不需要重开页面，编辑中的草稿不会丢失。
-
-  - 只同步有限长度的外观令牌值，不向插件页面暴露任意 CSS、宿主 DOM 或网络权限，沙箱与内容安全策略保持不变。
-
+  - 制作的每个环节都要你逐项确认，不再由「运行静态校验」一个按钮替代验收。
+  - 填写需求后按用途推荐四种模板：左侧独立工作区、右侧辅助面板、仅快捷命令、仅模型工具；生成的 `HOST-CAPABILITIES.md` 记录当前这份代码实际支持的 API、权限与信任边界，不按版本号猜测旧安装版功能。
+  - 源码留在当前项目，Main 在私有目录记录制作项目、源码身份与验收记录；重启后在同一项目选「恢复插件制作项目」，不自动恢复任意移动或替换过的目录。
+  - 已安装插件可「继续修改已安装插件」复制源码到当前项目，保留永久插件 ID；不复制正式插件的私有数据与配置，也不自动升级或发送模型请求。
+  - 验收证据拆成静态、自动化测试、试用运行、业务流程、双厂商模型工具五层，全部绑定源码指纹；源码变化后旧证据标记过期，静态通过不会点亮其它层。业务与双厂商结论标注为「用户自报」，不是应用自动验证。
+  - 「运行插件行为测试」需单独确认，在源码快照中执行本地 Node 测试，剥离模型供应商、MCP 等凭证环境并使用临时 HOME；这不等于限制 Node 的磁盘或网络访问，测试仍只应运行完全信任的代码。
+  - 试用使用单独的 trial ID、配置和数据目录，「打开已安装的试用副本」会核对是否为最近预览的源码；「结束试用」只卸载试用副本及其测试数据，保留项目源码与正式插件数据。
+  - 交付是显式动作：导出 ZIP 走系统保存对话框并显示 SHA-256，不安装不发布；正式安装保留永久 ID 与已有数据，更新需递增插件版本；可预览上一版代码，但不会回退已迁移的数据，升级前请自行备份。
+  - 新增开发验收脚本 `scripts/verify-plugin-authoring.mjs`，默认不联网、不调用真实模型，需显式设置环境变量才执行受信测试或真实模型验证。
 
   ## 记忆插件
 
+  - 「记忆」插件更新到 1.1.3：整页按当前主题重做，长期记忆、检索、每日日志、待办、回收站、设置与编辑器统一为一份可浏览的界面。
+  - 新增「本轮上下文账本」：右栏显示下一轮真正会装入的那一包，含预算堆叠条、每段的条数与字数，以及被条数上限挡掉的条目，可一键复制整包。
+  - 回收站按批次显示来源与最多三条预览，删除后可恢复；带条数上限时优先保留置顶记录。
 
-  - 附带「记忆」插件 1.0.1：长期记忆、每日日志、待办、可恢复删除、关键词检索与每轮上下文。
+  ## 其它
 
-  - 入口在最左图标轨，管理界面使用应用当前主题。
-
-  - 自动学习默认关闭，自动会话总结默认开启；启用后会用所选模型处理最近的对话片段，可能产生费用。
-
-
-  ## 知识地图插件
-
-
-  - 附带「知识地图」插件 1.10.0：新增默认关闭的后台自动维护，每轮结束用一个只读代理调查源码并补充最多 3 篇 `llmdoc/*.md`，同时登记到
-  `llmdoc/meta.json`。
-
-  - 只写 `llmdoc/`，保留写入前的精确原文，可在侧栏「自动维护记录」逐条回退，不创建 Git 提交、不推进全局基线、不删除文档；已有文档只更新
-  front matter 并追加正文，不覆盖手写内容。
-
-  - 新增 `agent.run`、`fs.read`、`fs.write` 权限，范围仅限
-  `llmdoc/`；开启后每轮会产生一次模型调用费用，回退新建文档时会留下可手动删除的「已回退」占位。
-
-
-  ## 文档与示例
-
-
-  - 统一第三方声明及相关说明中的当前产品名称，更新 llmdoc 插件示例界面和使用说明。
-
+  - 扩展页的制作入口按上述流程重排，权限与数据边界的说明写在对应步骤旁。
 
   ---
 
-
-  个人测试通道 0.2.110：仅供信任 EnsoCode Local Signing 证书的 Mac arm64
-  使用。不是正式发布（latest），未公证。安装与重启由用户操作。
+  个人测试通道 0.2.111：仅供信任 EnsoCode Local Signing 证书的 Mac arm64 使用。不是正式发布（latest），未公证。安装与重启由用户操作。
