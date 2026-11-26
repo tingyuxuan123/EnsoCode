@@ -1,15 +1,18 @@
 {
   "schema": "llmdoc.meta/v3",
   "baseline": {
-    "revision": "4c78f48fbce8cd67125ee29ad0152bc6c4a7650c",
-    "verifiedAt": "2026-11-23T09:24:55Z"
+    "revision": "5e6199d3f61b43a4b65e1681a454447d07f4a42d",
+    "verifiedAt": "2026-11-26T07:20:41.318Z"
   },
   "documents": {
     "releases/personal-mac.mdx": {
-      "validatedRevision": "0611b3eca9ebf277dd3f94b1818e7795982e8024"
+      "validatedRevision": "5e6199d3f61b43a4b65e1681a454447d07f4a42d"
     },
     "sessions/message-projection.mdx": {
-      "validatedRevision": "0611b3eca9ebf277dd3f94b1818e7795982e8024"
+      "validatedRevision": "5e6199d3f61b43a4b65e1681a454447d07f4a42d"
+    },
+    "plugins/background-agent-runs.mdx": {
+      "validatedRevision": "5e6199d3f61b43a4b65e1681a454447d07f4a42d"
     }
   },
   "convergence": {
