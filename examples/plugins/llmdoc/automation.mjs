@@ -232,7 +232,9 @@ function sessionId(value) {
 export function createAutomation(enso, deps) {
   const running = new Map();
   const store = () => reviews(enso.dataDir);
-  const timeoutMs = deps.timeoutMs ?? 120_000;
+  // agent_end 走 observe 分发，宿主在 30s 就取消整次调用；代理运行必须留在该窗口内，
+  // 否则超时后连写入 llmdoc/ 的权限也一起失效。留出读取既有文档和落盘的时间。
+  const timeoutMs = deps.timeoutMs ?? 20_000;
 
   /** @param {(state: {entries: Record<string, unknown>[]}) => unknown} change */
   async function ledgerChange(change) {
