@@ -182,6 +182,8 @@ test('one agent_end run proposes documents, writes them atomically and records a
   );
   assert.equal(calls.length, 1);
   assert.equal(calls[0].context, 'none');
+  // The host aborts an observe dispatch at 30s; stay inside it.
+  assert.ok(calls[0].timeoutMs <= 25_000);
   assert.match(calls[0].prompt, /themeBridge|会话投影/);
   assert.match(await readFile(join(root, 'llmdoc/renderer/plugin-theme.mdx'), 'utf8'), /插件主题/);
   const ledger = JSON.parse(await readFile(join(root, 'llmdoc/meta.json'), 'utf8'));

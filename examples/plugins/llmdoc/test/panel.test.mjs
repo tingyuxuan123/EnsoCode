@@ -409,3 +409,36 @@ test('empty searches show coverage guidance, and sampled reports are never displ
   assert.match(byId('status').textContent, /部分明细/);
   assert.match(byId('status').textContent, /3000/);
 });
+
+test('automatic maintenance entries can be reviewed and rolled back from the sidebar', async (t) => {
+  const id = '11111111-2222-3333-4444-555555555555';
+  let status = 'applied';
+  const { byId, click, calls } = await open(t, {
+    auto_reviews: () => ({
+      entries: [
+        {
+          id,
+          at: '2026-11-25T12:00:00.000Z',
+          status,
+          summary: 'llmdoc/renderer/plugin-theme.mdx（architecture）',
+          files: [{ path: 'llmdoc/renderer/plugin-theme.mdx', created: true }],
+        },
+      ],
+    }),
+    auto_restore: () => {
+      status = 'restored';
+      return { restored: true, id, needsManualDelete: true };
+    },
+  });
+  assert.equal(byId('auto').hidden, false);
+  await click('auto-refresh');
+  assert.deepEqual(calls.at(-1), ['auto_reviews', {}]);
+  assert.match(byId('auto-entries').textContent, /plugin-theme\.mdx/);
+  assert.match(byId('auto-entries').textContent, /新建/);
+  byId('auto-entries').querySelector('button').click();
+  await flush();
+  assert.ok(calls.some(([method, args]) => method === 'auto_restore' && args.id === id));
+  assert.deepEqual(calls.at(-1), ['auto_reviews', {}]);
+  assert.match(byId('auto-status').textContent, /手动删除/);
+  assert.equal(byId('auto-entries').querySelector('button'), null);
+});

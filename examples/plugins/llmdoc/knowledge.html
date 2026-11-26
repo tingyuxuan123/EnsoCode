@@ -495,6 +495,19 @@
         <p id="workflow-result" class="result" role="status"></p>
       </section>
 
+      <section id="auto" class="panel" aria-label="自动维护记录" hidden>
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">AUTO REVIEW</p>
+            <h2>自动维护记录</h2>
+            <p class="hint">开启自动维护后，每轮结束会补充最多 3 篇文档，只写 llmdoc/。这里可以审阅并回退到写入前的原文；不会自动创建 Git 提交。</p>
+          </div>
+          <button id="auto-refresh" class="ghost" type="button">刷新记录</button>
+        </div>
+        <p id="auto-status" class="hint" role="status"></p>
+        <section id="auto-entries" aria-label="自动维护条目"></section>
+      </section>
+
       <section id="catalog" class="panel-stack" aria-label="知识地图" hidden>
         <section class="panel">
           <div class="panel-head">
@@ -598,6 +611,7 @@
         byId('init').hidden = !isMissing();
         byId('maintenance').hidden = !isPresent();
         byId('catalog').hidden = !isPresent();
+        byId('auto').hidden = !isPresent();
         for (const button of document.querySelectorAll('button')) {
           button.disabled = busy || button.closest('[hidden]') !== null ||
             (button.hasAttribute('data-needs-git') && !hasGit());
@@ -851,6 +865,59 @@
         }, '正在准备草稿…');
       }
 
+      function autoEntries(entries) {
+        byId('auto-entries').replaceChildren();
+        const list = document.createElement('ul');
+        list.className = 'plain-list';
+        for (const entry of entries) {
+          const row = document.createElement('li');
+          row.className = 'doc-row';
+          appendText(row, 'strong', `${entry.at} · ${entry.status}`).className = 'doc-kind';
+          appendText(row, 'span', ` ${entry.summary}`).className = 'doc-description';
+          const files = document.createElement('p');
+          files.className = 'doc-snippet';
+          files.textContent = entry.files
+            .map((file) => `${file.path}${file.created ? '（新建）' : '（修改）'}`)
+            .join('、');
+          row.append(files);
+          if (entry.status === 'applied' || entry.status === 'failed') {
+            const button = appendText(row, 'button', '回退到写入前');
+            button.type = 'button';
+            button.className = 'ghost';
+            button.onclick = () => restoreAuto(entry.id);
+          }
+          list.append(row);
+        }
+        byId('auto-entries').append(list);
+      }
+
+      function loadAutoReviews() {
+        if (busy || !isPresent()) return;
+        return request('auto_reviews', {}, (result) => {
+          const entries = Array.isArray(result?.entries) ? result.entries : [];
+          byId('auto-status').textContent = entries.length
+            ? `共 ${entries.length} 条自动维护记录。`
+            : '还没有自动维护记录。可在扩展设置里开启自动维护。';
+          autoEntries(entries);
+        }, '正在读取自动维护记录…');
+      }
+
+      async function restoreAuto(id) {
+        if (busy || !isPresent() || typeof id !== 'string') return;
+        let notice = '';
+        const done = await request('auto_restore', { id }, (result) => {
+          if (result?.restored !== true) throw new Error('回退未完成。');
+          notice = result.needsManualDelete
+            ? '已回退。新建的文档保留为“已回退”占位，请手动删除。'
+            : '已回退到写入前的原文。';
+        }, '正在回退…');
+        if (done) {
+          await loadAutoReviews();
+          byId('auto-status').textContent = notice;
+        }
+        return done;
+      }
+
       function renderSetup(setup) {
         setupMissing.replaceChildren();
         if (setup?.nodeAvailable === false) {
@@ -939,6 +1006,7 @@
       };
       byId('validate').onclick = () => loadReport('validate');
       byId('prune-report').onclick = () => loadReport('prune_report');
+      byId('auto-refresh').onclick = loadAutoReviews;
       byId('tree').onclick = () => loadPage('tree', {});
       next.onclick = () => {
         if (page?.cursor) loadPage(page.method, { ...page.args, cursor: page.cursor });

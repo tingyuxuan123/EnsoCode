@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { access, lstat, open, opendir, readFile, realpath } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createAutomation } from './automation.mjs';
 import { registerLookupNudge } from './events.mjs';
 import { registerMaintenance } from './maintenance.mjs';
 import { createRuntimeSetup } from './setup.mjs';
@@ -806,6 +807,21 @@ export function activate(enso) {
     }));
   }
   registerMaintenance(enso, { gitRoot, executable, resolveGitExecutable, setup });
+  // Background knowledge maintenance: one bounded read-only run per finished turn, only when
+  // the user enabled it. Writes stay inside llmdoc/, keep exact prior bytes and never commit.
+  const automation = createAutomation(enso, {
+    projectRoot: (ctx) => {
+      const root = /** @type {{projectRoot?: unknown} | null | undefined} */ (ctx)?.projectRoot;
+      return typeof root === 'string' ? root : null;
+    },
+  });
+  enso.events.on('agent_end', automation.end);
+  enso.renderer.handle('auto_reviews', automation.list);
+  enso.renderer.handle('auto_restore', async (input) => {
+    if (!isRecord(input) || Object.keys(input).length !== 1 || typeof input.id !== 'string')
+      throw new Error('auto_restore 需要审阅条目 id。');
+    return automation.restore(input.id);
+  });
   registerLookupNudge(enso, {
     projectRoot: (ctx) => {
       const root = /** @type {{projectRoot?: unknown} | null | undefined} */ (ctx)?.projectRoot;

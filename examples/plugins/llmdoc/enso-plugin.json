@@ -2,20 +2,31 @@
   "schemaVersion": 1,
   "id": "codekiln.llmdoc",
   "name": "知识地图",
-  "version": "1.9.1",
-  "description": "浏览、检索和复核本机 Git 项目的 llmdoc 知识。打开侧栏自动检测运行环境，可按需安装 CLI。",
+  "version": "1.10.0",
+  "description": "浏览、检索和复核本机 Git 项目的 llmdoc 知识；可选的后台自动维护会随回合补充文档，保留审阅与回退。",
   "icon": "icon.svg",
   "main": "main.mjs",
+  "fs": { "read": ["llmdoc"], "write": ["llmdoc"] },
   "permissions": [
     "agent.tool",
     "ui.view",
     "composer.draft",
     "agent.intercept",
     "agent.inject",
-    "agent.observe"
+    "agent.observe",
+    "agent.run",
+    "fs.read",
+    "fs.write"
   ],
   "contributes": {
     "configuration": [
+      {
+        "key": "autoMaintain",
+        "title": "自动维护知识地图（每轮结束后，可能产生模型费用）",
+        "type": "boolean",
+        "default": false,
+        "description": "开启后，每个回合结束时用一个只读代理调查源码并补充最多 3 篇 llmdoc 文档，只写 llmdoc/，保留变更前内容以便审阅和回退，不会自动创建 Git 提交或推进全局基线。"
+      },
       {
         "key": "nodeExecutable",
         "title": "Node.js 可执行文件（留空即自动检测）",
@@ -50,6 +61,8 @@
     ],
     "views": [{ "id": "knowledge", "title": "知识地图", "entry": "knowledge.html" }],
     "methods": [
+      { "name": "auto_reviews", "timeoutMs": 12000 },
+      { "name": "auto_restore", "timeoutMs": 12000 },
       { "name": "tree", "timeoutMs": 12000 },
       { "name": "search", "timeoutMs": 12000 },
       { "name": "show", "timeoutMs": 12000 },

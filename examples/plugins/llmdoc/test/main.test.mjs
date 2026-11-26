@@ -192,6 +192,8 @@ test('sandbox methods and read-only agent tools share the pinned CLI contract', 
     'inspect',
     'install_cli',
     'prepare_workflow',
+    'auto_reviews',
+    'auto_restore',
   ].sort();
   assert.deepEqual([...tools.keys()].sort(), expectedTools);
   assert.deepEqual(contributes.agentTools.map((tool) => tool.name).sort(), expectedTools);
