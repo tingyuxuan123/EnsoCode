@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "codekiln.memory",
   "name": "记忆",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "本地长期记忆、每日日志、待办与可恢复删除；支持项目隔离、BM25 检索、每轮上下文、自动学习和会话总结。",
   "icon": "icon.svg",
   "engines": { "enso": ">=0.2.107" },

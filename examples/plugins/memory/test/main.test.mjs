@@ -154,6 +154,105 @@ test('AI failures, malformed output, stale results and settings changes never br
   assert.equal((await f.tool('memory_read')).count, 0);
 });
 
+test('the local extraction deadline reports a timeout, not the abort error that wins the promise race', async (t) => {
+  const f = await mount(t);
+  await f.tool('memory_write', { content: '已保存记忆不应受自动提取超时影响' });
+  await f.call('settings', { autoLearn: true, summarizeOnEnd: false });
+  const started = Promise.withResolvers();
+  f.api.agent.run = ({ signal }) =>
+    new Promise((_resolve, reject) => {
+      signal.addEventListener(
+        'abort',
+        () => reject(Object.assign(new Error('调用已取消'), { code: 'ABORTED' })),
+        { once: true }
+      );
+      started.resolve();
+    });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await f.fire('before_agent_start', { kind: 'user', prompt: '请整理这轮可复用的项目经验' });
+  const pending = f.fire('agent_end', { text: '本轮已完成验证' });
+  await started.promise;
+  t.mock.timers.tick(20000);
+  await pending;
+  t.mock.timers.reset();
+  assert.equal(f.notices.length, 1);
+  assert.match(f.notices[0][1], /20 秒/);
+  assert.doesNotMatch(f.notices[0][1], /^调用已取消$/);
+  assert.equal((await f.tool('memory_read')).items[0].content, '已保存记忆不应受自动提取超时影响');
+});
+
+test('lifecycle cancellation is quiet, never writes a late result, and does not disable later learning', async (t) => {
+  const f = await mount(t);
+  await f.call('settings', { autoLearn: true, summarizeOnEnd: false });
+  const controller = new AbortController();
+  const ctx = { ...f.ctx, signal: controller.signal };
+  const started = Promise.withResolvers();
+  f.api.agent.run = ({ signal }) =>
+    new Promise((_resolve, reject) => {
+      signal.addEventListener(
+        'abort',
+        () => reject(Object.assign(new Error('调用已取消'), { code: 'ABORTED' })),
+        { once: true }
+      );
+      started.resolve();
+    });
+  await f.fire('before_agent_start', { kind: 'user', prompt: '第一轮可以在会话关闭时取消' }, ctx);
+  const pending = f.fire('agent_end', { text: '正常结束文本' }, ctx);
+  await started.promise;
+  controller.abort();
+  await pending;
+  assert.equal(f.notices.length, 0);
+  assert.equal((await f.tool('memory_read')).count, 0);
+  f.api.agent.run = async () => ({
+    text: '{"memories":[{"content":"下一轮仍可保存新的项目经验","kind":"lesson"}],"summary":""}',
+  });
+  await f.fire('before_agent_start', { kind: 'user', prompt: '新调用上下文继续整理经验' });
+  await f.fire('agent_end', { text: '新的验证已完成' });
+  assert.equal((await f.tool('memory_read')).count, 1);
+});
+
+test('already-cancelled events never start a paid model request; manual errors are returned without duplicate OS notices', async (t) => {
+  const f = await mount(t);
+  await f.call('settings', { autoLearn: false, summarizeOnEnd: false });
+  const ctx = { ...f.ctx, signal: AbortSignal.abort() };
+  await f.fire(
+    'before_agent_start',
+    { kind: 'user', prompt: '已失效事件不该再向模型发送请求' },
+    ctx
+  );
+  await f.fire('agent_end', { text: '结束' }, ctx);
+  await f.call('analyze', {}, ctx);
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.notices.length, 0);
+  f.api.agent.run = async () => {
+    throw new Error('provider unavailable');
+  };
+  const result = await f.call('analyze');
+  assert.equal(result.ok, false);
+  assert.match(result.error, /provider unavailable/);
+  assert.equal(f.notices.length, 0);
+});
+
+test('repeated automatic failures notify once per cooldown but do not hide actual errors from the caller', async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  const f = await mount(t);
+  await f.call('settings', { autoLearn: true, summarizeOnEnd: false });
+  f.api.agent.run = async () => {
+    throw new Error('provider unavailable');
+  };
+  for (let i = 0; i < 2; i++) {
+    await f.fire('before_agent_start', { kind: 'user', prompt: `第 ${i} 次整理可复用经验` });
+    await f.fire('agent_end', { text: '完成' });
+  }
+  assert.equal(f.notices.length, 1);
+  now += 5 * 60 * 1000 + 1;
+  await f.fire('before_agent_start', { kind: 'user', prompt: '冷却结束后重新整理经验' });
+  await f.fire('agent_end', { text: '完成' });
+  assert.equal(f.notices.length, 2);
+  assert.equal((await f.tool('memory_read')).count, 0);
+});
+
 test('overlapping short turns keep FIFO user/assistant pairing and summarize the newest completed turn', async (t) => {
   const f = await mount(t);
   await f.call('settings', { autoLearn: true });
