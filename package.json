@@ -1,6 +1,6 @@
 {
   "name": "codekiln",
-  "version": "0.2.109",
+  "version": "0.2.110",
   "description": "CodeKiln - AI 协作工作台",
   "main": "./out/main/index.js",
   "author": {
