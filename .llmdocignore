@@ -1,0 +1,17 @@
+# .llmdocignore — llmdoc delta 的 unmapped/dirty 信号排除表
+# 语义：仓库根文件，每行一个 minimatch pattern，# 开头为注释，行尾 / 视为 /**。
+# 只排除"非实现面"的路径（运行期数据、生成物、scratch），不要排除真正承载行为的源码。
+
+# 设计画布的对照稿 scratch 工作区：曾存放多份 .vetd 稿，清理后为空的本地目录
+codeKiln_designs/**
+
+# 设计画布运行产物：历史对象库 / 渲染验收快照 / 随包依赖，都是可重生成的
+*.vetd/.history/**
+*.vetd/.snapshots/**
+*.vetd/node_modules/**
+
+# 本地 scratch、构建产物与出图数据（与 .gitignore 对齐，避免不进版本库的东西污染知识面）
+temp/**
+dist/**
+out/**
+.xiaoman/**
