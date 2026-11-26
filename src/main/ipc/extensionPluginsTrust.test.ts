@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', async (original) => ({
   ...(await original<object>()),
-  app: { on: mocks.on, isPackaged: false, getVersion: () => '0.2.104' },
+  app: { on: mocks.on, isPackaged: false, getVersion: () => '0.2.104', getPath: () => '/app/data' },
   ipcMain: { handle: mocks.handle },
   webContents: { getAllWebContents: mocks.all, fromId: () => null },
 }));

@@ -5,145 +5,651 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CodeKiln 记忆</title>
   <style>
-    :root { color-scheme:light;
-      --memory-bg:var(--panel,var(--background,#f5f8fa)); --memory-surface:var(--card,#fff);
-      --memory-fg:var(--foreground,#1b2632); --memory-muted:var(--muted-foreground,#576675);
-      --memory-line:var(--border,#cddbe4); --memory-primary:var(--primary,#408abf);
-      --memory-on-primary:var(--primary-foreground,#fff); --memory-brand:var(--brand,var(--primary,#408abf));
-      --memory-wash:var(--accent,#dfe7ec); --memory-danger:var(--destructive,#ad4b53);
-      --memory-radius:var(--radius,6px);
+    /* 宿主把主题令牌内联写到文档根节点（--muted/--accent/--radius/--primary …）。
+     * 这里的局部变量一律不占用宿主的名字，只读它们：同名会被宿主盖掉，次级文字会变黑。 */
+    :root { color-scheme: light;
+      --bg: var(--panel, var(--background, #f5f8fa));
+      --surface: var(--card, #ffffff);
+      --fg: var(--foreground, #1b2632);
+      --dim: var(--muted-foreground, #4d5c6a);
+      --faint: color-mix(in srgb, var(--dim) 78%, var(--bg));
+      --line: var(--border, #cddbe4);
+      --line-soft: color-mix(in srgb, var(--border, #cddbe4) 55%, transparent);
+      --raise: var(--accent, #e7edf1);
+      --action: var(--primary, #337099);
+      --on-action: var(--primary-foreground, #ffffff);
+      --mark: var(--brand, var(--primary, #337099));
+      --danger: var(--destructive, #9c3f47);
+      --card-radius: var(--radius, 6px);
+      --mono: var(--font-family-mono, ui-monospace, "SF Mono", Menlo, monospace);
     }
-    :root[data-theme="dark"] { color-scheme:dark;
-      --memory-bg:var(--panel,var(--background,#141416)); --memory-surface:var(--card,#212124);
-      --memory-fg:var(--foreground,#e6e6e7); --memory-muted:var(--muted-foreground,#ababad);
-      --memory-line:var(--border,#ffffff1f); --memory-primary:var(--primary,#e6e6e7);
-      --memory-on-primary:var(--primary-foreground,#141416); --memory-brand:var(--brand,var(--primary,#e6e6e7));
-      --memory-wash:var(--accent,#ffffff0f); --memory-danger:var(--destructive,#ea8a7d);
+    :root[data-theme="dark"] { color-scheme: dark;
+      --bg: var(--panel, #141416);
+      --surface: var(--card, #212124);
+      --fg: var(--foreground, #e6e6e7);
+      --dim: var(--muted-foreground, #ababad);
+      --line: var(--border, #2e2e33);
+      --raise: var(--accent, #2a2a2d);
+      --action: var(--primary, #e6e6e7);
+      --on-action: var(--primary-foreground, #141416);
+      --danger: var(--destructive, #ea8a7d);
     }
-    * { box-sizing:border-box; }
-    html { font-size:var(--font-size-base,14px); background:var(--memory-bg); }
-    body { width:100%; max-width:1120px; margin:0 auto; padding:28px 32px 40px; background:var(--memory-bg); color:var(--memory-fg); font-family:var(--font-family-sans,-apple-system,system-ui,sans-serif); font-size:calc(13rem / 14); line-height:1.5; -webkit-font-smoothing:antialiased; }
-    button,input,select,textarea { font:inherit; color:inherit; }
-    button { cursor:pointer; border:1px solid var(--memory-line); border-radius:var(--memory-radius); background:var(--memory-surface); padding:6px 10px; }
-    button:hover { border-color:var(--memory-primary); }
-    button:disabled { opacity:.48; cursor:default; }
-    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:2px solid var(--ring,var(--memory-primary)); outline-offset:2px; }
-    button.primary { background:var(--memory-primary); color:var(--memory-on-primary); border-color:var(--memory-primary); font-weight:600; }
-    button.danger { color:var(--memory-danger); }
-    button.small { padding:3px 8px; font-size:calc(12rem / 14); }
-    input,select,textarea { min-width:0; border:1px solid var(--memory-line); border-radius:var(--memory-radius); padding:8px 9px; background:var(--memory-surface); }
-    input[type="checkbox"] { accent-color:var(--memory-primary); width:16px; height:16px; }
-    h1 { font-size:calc(22rem / 14); letter-spacing:-.5px; margin:0; font-weight:600; }
-    h2 { font-size:calc(15rem / 14); margin:0 0 8px; }
-    p { margin:6px 0; }
-    .muted { color:var(--memory-muted); font-size:calc(12rem / 14); }
-    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .between { justify-content:space-between; }
-    .heading { margin-bottom:18px; }
-    .badge { color:var(--memory-brand); background:var(--memory-wash); border-radius:var(--memory-radius); padding:2px 7px; font-size:calc(11rem / 14); }
-    .project { overflow-wrap:anywhere; margin-top:4px; }
-    #tabs { display:flex; gap:2px; border-bottom:1px solid var(--memory-line); padding-bottom:7px; margin:18px 0; overflow-x:auto; }
-    #tabs button { white-space:nowrap; border:0; background:transparent; padding:6px 12px; color:var(--memory-muted); }
-    #tabs button[aria-selected="true"] { background:var(--memory-wash); color:var(--memory-brand); font-weight:600; }
-    #search { width:100%; }
-    .filters { margin:10px 0 14px; }
-    .filters select { max-width:46%; padding:5px 7px; }
-    .item { padding:18px 0; border-bottom:1px solid var(--memory-line); }
-    .item:first-child { padding-top:4px; }
-    .meta { display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--memory-muted); font-size:calc(11rem / 14); }
-    .body { white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0 12px; }
-    .done .body { text-decoration:line-through; opacity:.65; }
-    .empty { padding:48px 12px; text-align:center; color:var(--memory-muted); }
-    .empty strong { display:block; color:var(--memory-fg); font-size:calc(15rem / 14); margin-bottom:8px; }
-    .pager { display:flex; justify-content:space-between; align-items:center; margin:16px 0; }
-    #notice { margin:10px 0; font-size:calc(12rem / 14); overflow-wrap:anywhere; white-space:pre-wrap; }
-    #notice[data-error="true"] { color:var(--memory-danger); }
-    .setting { padding:16px 0; border-bottom:1px solid var(--memory-line); }
-    .setting label { display:flex; justify-content:space-between; gap:16px; align-items:center; }
-    .setting p { color:var(--memory-muted); font-size:calc(12rem / 14); }
-    .setting input[type="number"] { width:94px; }
-    .warning { color:var(--memory-danger); font-size:calc(12rem / 14); padding:12px; border:1px solid var(--memory-line); border-radius:var(--memory-radius); margin:16px 0; }
-    dialog { background:var(--memory-surface); color:var(--memory-fg); border:1px solid var(--memory-line); border-radius:var(--memory-radius); width:calc(100% - 24px); max-width:560px; padding:20px; max-height:90vh; overflow:auto; }
-    dialog::backdrop { background:#0007; }
-    dialog textarea { display:block; width:100%; min-height:200px; resize:vertical; margin-top:8px; }
-    dialog .field { margin:12px 0; }
-    dialog .field label { display:block; font-size:calc(12rem / 14); color:var(--memory-muted); margin-bottom:5px; }
-    dialog .footer { margin-top:18px; justify-content:flex-end; }
-    [hidden] { display:none; }
-    @media (max-width:600px) { body { padding:18px 16px 28px; } #tabs button { padding:5px 9px; } }
+    * { box-sizing: border-box; }
+    html { height: 100%; font-size: var(--font-size-base, 14px); }
+    body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg);
+      font-family: var(--font-family-sans, -apple-system, system-ui, sans-serif);
+      font-size: calc(13rem / 14); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; border: 0; background: none; padding: 0; }
+    /* 原生控件一律接管外观：否则会带系统箭头、系统高亮和浅色弹层，和宿主不是一套。 */
+    select { appearance: none; -webkit-appearance: none; background-image: none; cursor: pointer; }
+    select::-ms-expand { display: none; }
+    option { background: var(--surface); color: var(--fg); }
+    input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
+    input[type="search"]::-webkit-search-cancel-button { display: none; }
+    button:disabled { opacity: .4; cursor: default; }
+    h1, h2, p { margin: 0; }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+    .shell { display: flex; flex-direction: column; height: 100%; }
+
+    /* ── 顶栏：项目范围 · 搜索 · 记一条 ─────────────────────────── */
+    .topbar { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 24px; flex: none; }
+    .scope { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 6px;
+      border-radius: var(--card-radius); color: var(--fg); font-size: calc(13rem / 14); }
+    .scope:hover { background: var(--raise); }
+    .scope svg { width: 16px; height: 16px; color: var(--dim); }
+    .scope__more { color: var(--faint); font-size: calc(12rem / 14); }
+    .scope__chevron { width: 14px; height: 14px; color: var(--faint); }
+    .counts { color: var(--faint); font-size: calc(11rem / 14); font-variant-numeric: tabular-nums; }
+    .topbar__end { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .search { display: flex; align-items: center; gap: 8px; width: 236px; height: 32px;
+      padding: 0 10px; border: 1px solid var(--line); border-radius: var(--card-radius); background: var(--surface); }
+    .search:focus-within { border-color: var(--ring, var(--mark));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring, var(--mark)) 20%, transparent); }
+    .search svg { width: 14px; height: 14px; flex: none; color: var(--faint); }
+    .search input { width: 100%; min-width: 0; border: 0; background: none; outline: none;
+      font-size: calc(12rem / 14); }
+    .search input::placeholder { color: var(--faint); }
+    .search kbd { color: var(--faint); font-family: var(--mono); font-size: calc(10rem / 14); }
+    .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+      border: 1px solid var(--line); border-radius: var(--card-radius); font-size: calc(12rem / 14); color: var(--fg); }
+    .btn:hover { border-color: color-mix(in srgb, var(--dim) 40%, var(--line)); }
+    .btn--primary { background: var(--action); color: var(--on-action); border-color: var(--action);
+      font-weight: 500; }
+    .btn--primary:hover { filter: brightness(1.05); border-color: var(--action); }
+    .btn--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+    .btn svg { width: 15px; height: 15px; }
+    .btn--icon { width: 28px; height: 28px; padding: 0; justify-content: center; border-color: transparent; color: var(--dim); }
+    .btn--icon:hover { background: var(--raise); color: var(--fg); }
+    .btn--sm { height: 28px; padding: 0 10px; }
+
+    /* ── 页签 ───────────────────────────────────────────────── */
+    .tabs { display: flex; gap: 24px; height: 41px; padding: 0 24px; flex: none;
+      border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { position: relative; display: flex; align-items: center; gap: 6px; color: var(--dim);
+      font-size: calc(12.5rem / 14); white-space: nowrap; }
+    .tab:hover { color: var(--fg); }
+    .tab[aria-selected="true"] { color: var(--fg); }
+    .tab[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+      height: 2px; border-radius: 2px; background: var(--fg); }
+    .tab__count { color: var(--faint); font-family: var(--mono); font-size: calc(11rem / 14); }
+
+    .notice { padding: 0 24px; color: var(--dim); font-size: calc(12rem / 14); white-space: pre-wrap;
+      overflow-wrap: anywhere; }
+    .notice:not(:empty) { padding-top: 10px; }
+    .notice[data-error="true"] { color: var(--danger); }
+
+    /* ── 工作区：主栏 + 本轮上下文账本 ─────────────────────────── */
+    .workspace { display: flex; flex: 1; min-height: 0; }
+    .main { flex: 1; min-width: 0; overflow: auto; padding: 8px 24px 24px; }
+    .filters { display: flex; align-items: center; gap: 4px; height: 36px; }
+    .filter { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px;
+      border-radius: 4px; color: var(--dim); font-size: calc(12rem / 14); }
+    .filter:hover { background: var(--raise); color: var(--fg); }
+    .filter svg { width: 14px; height: 14px; color: var(--faint); }
+    .filters select { appearance: none; border: 0; background: none; padding: 0;
+      color: var(--dim); font-size: calc(12rem / 14); cursor: pointer; }
+    .filters input[type="date"] { border: 0; background: none; color: var(--dim); font-size: calc(12rem / 14); }
+    .filters__end { margin-left: auto; color: var(--faint); font-size: calc(11rem / 14); }
+    .hint { color: var(--faint); font-size: calc(11.5rem / 14); padding: 2px 0 6px; }
+
+    .item { border-top: 1px solid var(--line-soft); padding: 14px 0; }
+    .item:first-child { border-top: 0; }
+    .item--log { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; }
+    .item__time { padding-top: 3px; color: var(--faint); font-family: var(--mono);
+      font-size: calc(11rem / 14); font-variant-numeric: tabular-nums; }
+    .item__meta { display: flex; align-items: center; gap: 8px; font-size: calc(12rem / 14); }
+    .kind { font-weight: 500; }
+    .pin { color: var(--mark); font-size: calc(11rem / 14); }
+    .meta { color: var(--dim); }
+    .dot { color: var(--faint); }
+    .time { margin-left: auto; color: var(--faint); font-family: var(--mono);
+      font-size: calc(11rem / 14); font-variant-numeric: tabular-nums; }
+    .item__body { margin: 8px 0 0; max-width: 74ch; font-size: calc(13rem / 14); line-height: 1.75;
+      white-space: pre-wrap; overflow-wrap: anywhere; }
+    .item.done .item__body { text-decoration: line-through; color: var(--faint); }
+    .actions { display: flex; align-items: center; gap: 2px; margin-left: 12px; }
+    .actions button { display: inline-flex; align-items: center; justify-content: center; width: 24px;
+      height: 24px; border-radius: 4px; color: var(--faint); }
+    .actions button:hover { background: var(--raise); color: var(--fg); }
+    .actions button[data-danger]:hover { color: var(--danger); }
+    .actions button[aria-pressed="true"] { color: var(--mark); }
+    .actions svg { width: 14px; height: 14px; }
+
+    .check { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+      border: 1px solid color-mix(in srgb, var(--dim) 55%, transparent); border-radius: 3px; flex: none; }
+    .check[data-on="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+    .check svg { width: 12px; height: 12px; }
+    .todo { display: flex; align-items: flex-start; gap: 12px; border-top: 1px solid var(--line-soft); padding: 12px 0; }
+    .todo:first-child { border-top: 0; }
+    .todo__main { flex: 1; min-width: 0; }
+    .todo__text { font-size: calc(13rem / 14); line-height: 1.7; overflow-wrap: anywhere; }
+    .todo__meta { margin-top: 4px; display: flex; gap: 6px; color: var(--faint); font-size: calc(11rem / 14); }
+    .todo--done .todo__text { color: var(--faint); text-decoration: line-through; }
+    .group { display: flex; align-items: center; gap: 8px; margin-top: 22px; padding-top: 14px;
+      border-top: 1px solid var(--line); color: var(--dim); font-size: calc(12rem / 14); }
+    .group button { margin-left: auto; color: var(--dim); font-size: calc(12rem / 14); }
+    .group button:hover { color: var(--danger); }
+    .todo-actions { display: flex; align-items: center; justify-content: flex-end; height: 32px; }
+
+    .week { display: flex; align-items: center; gap: 4px; height: 36px; }
+    .week__nav { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+      border-radius: 4px; color: var(--faint); }
+    .week__nav:hover { background: var(--raise); color: var(--fg); }
+    .week__nav svg { width: 14px; height: 14px; }
+    .week__label { margin-left: 10px; color: var(--faint); font-size: calc(11rem / 14); }
+    .week button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 46px;
+      height: 28px; padding: 0 6px;
+      border-radius: var(--card-radius); color: var(--faint); font-size: calc(11rem / 14); }
+    .week__day-name { font-size: calc(10.5rem / 14); }
+    .week button[data-has="true"] { color: var(--fg); }
+    .week button[aria-current="date"] { background: var(--raise); color: var(--fg); }
+    .week__num { font-family: var(--mono); font-size: calc(12rem / 14); font-variant-numeric: tabular-nums; }
+    .week__meta { margin-left: 12px; color: var(--faint); font-size: calc(11rem / 14); }
+
+    .composer { display: flex; align-items: flex-start; gap: 12px; width: 100%; margin-top: 20px;
+      padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--card-radius); background: var(--surface);
+      text-align: left; }
+    .composer:hover { border-color: color-mix(in srgb, var(--dim) 40%, var(--line)); }
+    .composer svg { width: 14px; height: 14px; color: var(--faint); flex: none; }
+    .composer span { color: var(--faint); font-size: calc(12.5rem / 14); }
+    .composer small { display: block; margin-top: 6px; color: var(--faint); font-size: calc(10.5rem / 14); }
+
+    .empty { padding: 48px 12px; text-align: center; color: var(--dim); }
+    .empty strong { display: block; margin-bottom: 8px; color: var(--fg); font-size: calc(15rem / 14); font-weight: 500; }
+    .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px;
+      padding-top: 14px; border-top: 1px solid var(--line); }
+    .pager__page { color: var(--faint); font-family: var(--mono); font-size: calc(11rem / 14); font-variant-numeric: tabular-nums; }
+
+    .batch { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; align-items: start; gap: 24px;
+      border-top: 1px solid var(--line-soft); padding: 14px 0; }
+    .batch__head { display: flex; align-items: baseline; gap: 8px; font-size: calc(12rem / 14); }
+    .batch__count { font-family: var(--mono); font-size: calc(13rem / 14); font-variant-numeric: tabular-nums; }
+    .batch__time { color: var(--faint); font-family: var(--mono); font-size: calc(11rem / 14); }
+    .batch__list { display: flex; flex-direction: column; gap: 4px; }
+    .batch__line { display: flex; gap: 8px; color: var(--dim); font-size: calc(13rem / 14); line-height: 1.7; }
+    .batch__line::before { content: ""; width: 3px; height: 3px; margin-top: 9px; border-radius: 50%;
+      background: var(--faint); flex: none; }
+    .batch__source { margin-top: 6px; color: var(--faint); font-size: calc(11rem / 14); }
+    .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 3px;
+      background: var(--raise); color: var(--dim); font-size: calc(11rem / 14); }
+    .model-value { color: var(--fg); font-size: calc(13rem / 14); }
+
+    /* ── 本轮上下文账本 ─────────────────────────────────────── */
+    .pack { display: flex; flex-direction: column; width: 336px; flex: none; padding: 20px 24px;
+      border-left: 1px solid var(--line); overflow: auto; }
+    .pack__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .pack__head h2 { font-size: calc(13rem / 14); font-weight: 500; }
+    .pack__mode { color: var(--faint); font-size: calc(11rem / 14); }
+    .pack__figure { display: flex; align-items: baseline; gap: 6px; margin-top: 12px; }
+    .pack__total { font-size: calc(30rem / 14); font-weight: 300; line-height: 1;
+      font-variant-numeric: tabular-nums; }
+    .pack__budget { color: var(--faint); font-size: calc(12rem / 14); font-variant-numeric: tabular-nums; }
+    .pack__pct { margin-left: auto; color: var(--dim); font-family: var(--mono); font-size: calc(11rem / 14); }
+    .pack__bar { display: flex; gap: 2px; height: 8px; margin-top: 12px; border-radius: 99px;
+      background: var(--raise); overflow: hidden; }
+    .pack__seg { height: 100%; border-radius: 99px; background: var(--mark); }
+    .pack__seg--todos { opacity: 1; }
+    .pack__seg--today { opacity: .75; }
+    .pack__seg--memory { opacity: .5; }
+    .pack__seg--related { opacity: .38; }
+    .pack__seg--yesterday { opacity: .3; }
+    .pack__caption { margin-top: 8px; color: var(--faint); font-size: calc(11rem / 14); }
+    .pack__legend { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+    .pack__row { display: flex; align-items: baseline; gap: 8px; }
+    .pack__swatch { width: 6px; height: 6px; border-radius: 1px; background: var(--mark); flex: none; }
+    .pack__row[data-empty="true"] .pack__swatch { background: var(--line); }
+    .pack__label { font-size: calc(12rem / 14); }
+    .pack__row[data-empty="true"] .pack__label { color: var(--faint); }
+    .pack__off { color: var(--faint); font-size: calc(11rem / 14); }
+    .pack__rows { margin-left: auto; color: var(--faint); font-family: var(--mono); font-size: calc(11rem / 14); }
+    .pack__chars { width: 52px; text-align: right; color: var(--dim); font-family: var(--mono);
+      font-size: calc(11rem / 14); }
+    .pack__note { margin-top: 20px; padding: 12px; border-radius: var(--card-radius); background: var(--raise); }
+    .pack__note p { font-size: calc(12rem / 14); line-height: 1.65; }
+    .pack__note small { display: block; margin-top: 6px; color: var(--faint); font-size: calc(10.5rem / 14); }
+    .pack__note ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pack__note li { color: var(--faint); font-size: calc(11rem / 14); overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .pack__note button { margin-top: 10px; color: var(--mark); font-size: calc(12rem / 14); }
+    .pack__copy { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 32px;
+      margin-top: 20px; border: 1px solid var(--line); border-radius: var(--card-radius); color: var(--dim);
+      font-size: calc(12rem / 14); }
+    .pack__copy:hover { border-color: color-mix(in srgb, var(--dim) 40%, var(--line)); color: var(--fg); }
+    .pack__copy svg { width: 14px; height: 14px; }
+    .pack__foot { margin-top: 8px; color: var(--faint); font-size: calc(11rem / 14); }
+
+    /* ── 设置 / 暂停 ────────────────────────────────────────── */
+    .settings { max-width: 1200px; }
+    .settings__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 40px; }
+    .col__title { font-size: calc(13rem / 14); font-weight: 500; }
+    .col__note { margin-top: 4px; color: var(--dim); font-size: calc(11.5rem / 14); line-height: 1.6; }
+    .setting { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+      padding: 12px 0; border-top: 1px solid var(--line-soft); }
+    .setting:first-of-type { border-top: 0; }
+    .setting__title { font-size: calc(13rem / 14); }
+    .setting__desc { margin-top: 4px; max-width: 46ch; color: var(--dim); font-size: calc(11.5rem / 14); line-height: 1.6; }
+    .setting__control { flex: none; padding-top: 2px; }
+    .switch { position: relative; display: inline-flex; width: 28px; height: 16px; flex: none; }
+    .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+    .switch__track { width: 100%; height: 100%; border-radius: 99px; background: var(--line); pointer-events: none; }
+    .switch__track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--faint); transition: transform .12s ease, background .12s ease; }
+    .switch input:checked + .switch__track { background: var(--fg); }
+    .switch input:checked + .switch__track::after { transform: translateX(12px); background: var(--bg); }
+    .switch input:focus-visible + .switch__track { outline: 2px solid var(--mark); outline-offset: 2px; }
+    .input, .select { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px;
+      border: 1px solid var(--line); border-radius: var(--card-radius); background: var(--surface);
+      font-size: calc(12rem / 14); }
+    .input input, .select select { min-width: 0; border: 0; background: none; outline: none;
+      font-size: inherit; font-variant-numeric: tabular-nums; }
+    .input input { width: 76px; font-family: var(--mono); }
+    .input span, .select svg { color: var(--faint); font-size: calc(11rem / 14); }
+    .select { width: 100%; justify-content: space-between; cursor: pointer; }
+    .select select { flex: 1; }
+    .select svg { width: 14px; height: 14px; flex: none; }
+    .budget { margin-top: 16px; padding: 12px; border-radius: var(--card-radius); background: var(--raise); }
+    .budget__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+      color: var(--dim); font-size: calc(11.5rem / 14); }
+    .budget__value { color: var(--fg); font-family: var(--mono); font-size: calc(11rem / 14); }
+    .budget__bar { display: flex; gap: 2px; height: 6px; margin-top: 8px; border-radius: 99px;
+      background: var(--line); overflow: hidden; }
+    .budget__seg { height: 100%; background: var(--mark); border-radius: 99px; }
+    .budget__foot { margin-top: 8px; color: var(--faint); font-size: calc(11rem / 14); }
+    .stack { display: flex; flex-direction: column; gap: 8px; }
+    .stack .btn { width: 100%; justify-content: flex-start; }
+    .safety { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); display: flex;
+      align-items: flex-start; justify-content: space-between; gap: 40px; }
+    .safety p { margin-top: 6px; max-width: 86ch; color: var(--dim); font-size: calc(11.5rem / 14); line-height: 1.7; }
+
+    .paused { max-width: 720px; margin: 0 auto; padding-top: 72px; }
+    .paused h1 { font-size: calc(20rem / 14); font-weight: 500; letter-spacing: -.2px; }
+    .paused__lead { margin-top: 8px; max-width: 62ch; color: var(--dim); font-size: calc(13rem / 14); line-height: 1.75; }
+    .paused__actions { display: flex; gap: 8px; margin-top: 24px; }
+    .paused__log { margin-top: 24px; color: var(--faint); font-size: calc(11.5rem / 14); }
+    .paused dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin: 48px 0 0;
+      padding-top: 24px; border-top: 1px solid var(--line); }
+    .paused dt { font-size: calc(12rem / 14); font-weight: 500; }
+    .paused dd { margin: 6px 0 0; color: var(--dim); font-size: calc(11.5rem / 14); line-height: 1.7; }
+
+    /* ── 浮层 ──────────────────────────────────────────────── */
+    dialog { width: calc(100% - 32px); max-width: 560px; padding: 24px; border: 1px solid var(--line);
+      border-radius: calc(var(--card-radius) + 2px); background: var(--surface); color: var(--fg); }
+    dialog::backdrop { background: color-mix(in srgb, var(--bg) 78%, black); }
+    dialog h2 { font-size: calc(15rem / 14); font-weight: 500; }
+    .dialog__lead { margin-top: 4px; color: var(--faint); font-size: calc(11.5rem / 14); }
+    .dialog__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .field { margin-top: 16px; }
+    /* 只给纯文字标签设块级；.select 包裹层要保持 inline-flex，否则箭头贴不到右边。 */
+    .field > label:not(.select) { display: block; color: var(--dim); font-size: calc(11.5rem / 14); }
+    .field__row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field textarea { display: block; width: 100%; min-height: 112px; margin-top: 6px; padding: 10px 12px;
+      border: 1px solid var(--line); border-radius: var(--card-radius); background: var(--bg); color: var(--fg);
+      font-size: calc(13rem / 14); line-height: 1.75; resize: vertical; }
+    .field__foot { display: flex; align-items: center; justify-content: space-between; margin-top: 6px;
+      color: var(--faint); font-size: calc(11rem / 14); }
+    .field__foot .mono { font-variant-numeric: tabular-nums; }
+    .segmented { display: inline-flex; align-items: center; height: 32px; padding: 2px;
+      border: 1px solid var(--line); border-radius: var(--card-radius); font-size: calc(12rem / 14); }
+    .segmented button { display: inline-flex; align-items: center; height: 26px; padding: 0 10px;
+      border-radius: 4px; color: var(--dim); }
+    .segmented button[aria-pressed="true"] { background: var(--raise); color: var(--fg); }
+    .segmented button:disabled { opacity: .5; }
+    .dialog__row { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+    .dialog__toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font-size: calc(12rem / 14); }
+    .dialog__budget { color: var(--faint); font-size: calc(11rem / 14); font-variant-numeric: tabular-nums; }
+    .dialog__foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .dialog__error { margin-top: 12px; color: var(--danger); font-size: calc(12rem / 14); }
+    .dialog__error:empty { display: none; }
+
+    /* 和宿主一致：控件聚焦是「边框染色 + 一圈很淡的 ring」，不是粗橙描边。 */
+    :focus-visible { outline: 2px solid var(--ring, var(--mark)); outline-offset: 1px; }
+    input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: none; border-color: var(--ring, var(--mark));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring, var(--mark)) 20%, transparent);
+    }
+
+    [hidden] { display: none; }
+
+    @media (max-width: 1180px) { .pack { display: none; } }
+    @media (max-width: 980px) {
+      .settings__grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+      .settings__grid > section + section { margin-top: 24px; }
+      .counts { display: none; }
+    }
+    @media (max-width: 640px) {
+      .topbar, .tabs, .notice { padding-left: 16px; padding-right: 16px; }
+      .main { padding: 8px 16px 24px; }
+      .search { width: 150px; }
+      .batch { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+      .paused dl { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    }
   </style>
 </head>
 <body>
-  <header class="heading">
-    <div class="row between"><h1>记忆</h1><span class="badge" id="state-badge">正在连接</span></div>
-    <p class="muted">留下值得记住的，让下一次对话接得上。</p>
-    <p class="muted project" id="project"></p>
-  </header>
-  <div class="row between"><span id="counts" class="muted"></span><button id="refresh" class="small" type="button">刷新</button></div>
-  <div role="tablist" aria-label="记忆分类" id="tabs">
-    <button type="button" role="tab" data-tab="memory" aria-selected="true">长期记忆</button>
-    <button type="button" role="tab" data-tab="daily" aria-selected="false">每日日志</button>
-    <button type="button" role="tab" data-tab="todos" aria-selected="false">待办</button>
-    <button type="button" role="tab" data-tab="trash" aria-selected="false">最近删除</button>
-    <button type="button" role="tab" data-tab="settings" aria-selected="false">设置</button>
-  </div>
-  <div id="notice" role="status" aria-live="polite"></div>
-  <section id="browser">
-    <input id="search" type="search" placeholder="搜索全部记忆、日志和待办…" maxlength="200" aria-label="关键词搜索" />
-    <div class="row between filters">
-      <div class="row">
-        <select id="kind" aria-label="记忆类型"><option value="">全部类型</option><option value="preference">偏好</option><option value="fact">事实</option><option value="decision">决定</option><option value="lesson">经验</option><option value="project">项目约定</option><option value="feedback">反馈</option></select>
-        <select id="scope" aria-label="记忆范围"><option value="">全部范围</option><option value="project">当前项目</option><option value="global">全局</option></select>
-        <input id="date" type="date" aria-label="日志日期" hidden />
-        <select id="todo-filter" aria-label="待办状态" hidden><option value="all">全部状态</option><option value="open">未完成</option><option value="done">已完成</option></select>
+  <div class="shell">
+    <header class="topbar">
+      <button class="scope" id="scope" type="button" title="切换记忆范围">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+        <span id="project">全局</span>
+        <span class="scope__more">＋ 全局</span>
+        <svg aria-hidden="true" class="scope__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <span class="counts" id="counts"></span>
+      <div class="topbar__end">
+        <label class="search" id="search-field">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <input id="search" type="search" placeholder="搜索记忆、日志与待办" maxlength="200" aria-label="关键词搜索" />
+          <kbd>/</kbd>
+        </label>
+        <button id="add" class="btn btn--primary" type="button">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          <span id="add-label">记一条</span>
+        </button>
+        <button id="save-settings" class="btn btn--primary" type="button" hidden>保存设置</button>
+        <button id="refresh" class="btn btn--icon" type="button" title="刷新" aria-label="刷新">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
       </div>
-      <button id="add" class="primary small" type="button">＋ 记一条</button>
+    </header>
+
+    <div role="tablist" aria-label="记忆分类" class="tabs" id="tabs">
+      <button class="tab" type="button" role="tab" data-tab="memory" aria-selected="true">长期记忆<span class="tab__count" data-count="memory"></span></button>
+      <button class="tab" type="button" role="tab" data-tab="daily" aria-selected="false">每日日志<span class="tab__count" data-count="daily"></span></button>
+      <button class="tab" type="button" role="tab" data-tab="todos" aria-selected="false">待办<span class="tab__count" data-count="todos"></span></button>
+      <button class="tab" type="button" role="tab" data-tab="trash" aria-selected="false">最近删除<span class="tab__count" data-count="trash"></span></button>
+      <button class="tab" type="button" role="tab" data-tab="settings" aria-selected="false">设置</button>
     </div>
-    <div class="row" id="todo-actions" hidden><button id="clear-done" class="small" type="button">移除已完成（可恢复）</button></div>
-    <p id="search-hint" class="muted" hidden>关键词检索 · 支持中文、#标签、[[链接]] · 不是语义搜索</p>
-    <div id="items" aria-live="polite"></div>
-    <div class="pager" id="pager"><button id="prev" type="button">上一页</button><span id="page" class="muted"></span><button id="next" type="button">下一页</button></div>
-  </section>
-  <section id="settings-panel" hidden>
-    <form id="settings-form">
-      <div class="setting"><label for="enabled">启用记忆<input id="enabled" type="checkbox" /></label><p>暂停后不再向模型注入记忆，也不接受模型写入；设置和已有数据保留。</p></div>
-      <div class="setting"><label for="autoLearn">自动学习<input id="autoLearn" type="checkbox" /></label><p>默认关闭。每轮完成后提取最多 3 条长期记忆，默认留在当前项目。不记录原始对话。</p></div>
-      <div class="setting"><label for="summarizeOnEnd">自动会话总结<input id="summarizeOnEnd" type="checkbox" /></label><p>默认开启。从第 2 轮开始更新当日会话总结检查点，退出前已落盘，不依赖退出时模型仍在线。</p></div>
-      <div class="setting"><label for="mode">上下文快照<select id="mode"><option value="stable">稳定快照（推荐）</option><option value="per-turn">逐轮检索</option></select></label><p>稳定快照在数据/设置变化、压缩、跨天或新会话时刷新；逐轮模式额外挑选与当前问题相关的 3 条记忆。</p></div>
-      <div class="setting"><label for="includeDaily">注入今日 / 昨日日志<input id="includeDaily" type="checkbox" /></label></div>
-      <div class="setting"><label for="includeTodos">注入未完成待办<input id="includeTodos" type="checkbox" /></label></div>
-      <div class="setting"><label for="maxMemories">长期记忆条数<input id="maxMemories" type="number" min="1" max="100" required /></label></div>
-      <div class="setting"><label for="maxChars">上下文总字符预算<input id="maxChars" type="number" min="2000" max="16000" step="100" required /></label><p>优先级：待办 → 今日日志 → 置顶 / 长期记忆 → 相关记忆 → 昨日日志。</p></div>
-      <div class="warning">自动学习和总结会把已隐去疑似凭证的最近 12 轮文本（每条最多 1200 字符）发送给所选模型，可能产生费用。凭证检测不是绝对保证，请不要在对话中发送秘密。</div>
-      <p class="muted" id="model-info"></p><p class="muted">模型选择：扩展 → 记忆 → 配置 → 自动学习与总结模型（宿主模型选择器）。</p>
-      <div class="row"><button class="primary" type="submit">保存设置</button><button id="analyze" type="button">立即提取本会话</button></div>
-    </form>
-    <div class="setting"><h2>导出与恢复</h2><p>仅包含全局与当前项目的数据。卸载会删除插件私有数据，请先备份。</p><div class="row"><button id="copy" type="button">复制为 Markdown</button><button id="backup" type="button">生成 JSON 备份产物</button></div></div>
-    <div class="setting"><h2>数据安全</h2><p>新增、编辑和模型提取都会拒绝疑似凭证；磁盘中的敏感条目也不会注入。所有删除先进入回收站。回收站满 100 批时清理已恢复的历史；未恢复记录绝不自动淘汰，仍满时拒绝继续删除。</p><button id="clear" class="danger" type="button">清空当前可见数据…</button></div>
-  </section>
+
+    <p class="notice" id="notice" role="status" aria-live="polite"></p>
+
+    <div class="workspace">
+      <main class="main">
+        <section id="browser">
+          <div class="filters">
+            <label class="filter" id="kind-field"><select id="kind" aria-label="记忆类型"><option value="">全部类型</option><option value="preference">偏好</option><option value="fact">事实</option><option value="decision">决定</option><option value="lesson">经验</option><option value="project">项目约定</option><option value="feedback">反馈</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
+            <label class="filter" id="scope-field"><select id="scope" aria-label="记忆范围"><option value="">全部范围</option><option value="project">当前项目</option><option value="global">全局</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
+            <label class="filter" id="date-field" hidden><input id="date" type="date" aria-label="日志日期" /></label>
+            <label class="filter" id="todo-field"><select id="todo-filter" aria-label="待办状态"><option value="all">全部状态</option><option value="open">未完成</option><option value="done">已完成</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
+            <div class="week" id="week"></div>
+            <span class="filters__end" id="sort-label">按更新时间倒序</span>
+          </div>
+          <p class="hint" id="search-hint" hidden>BM25 关键词检索 · 支持中文、#标签、[[链接]] · 不是语义搜索</p>
+          <p class="hint" id="trash-hint" hidden>删除的条目先进这里，可恢复 · 满 100 批后清理已恢复的历史，未恢复的记录不会自动淘汰</p>
+          <div class="todo-actions" id="todo-actions" hidden>
+            <button class="btn btn--sm" id="clear-done" type="button">移除已完成（可恢复）</button>
+          </div>
+          <div id="items" aria-live="polite"></div>
+          <div class="pager" id="pager">
+            <button id="prev" class="btn btn--sm" type="button">上一页</button>
+            <span class="pager__page" id="page"></span>
+            <button id="next" class="btn btn--sm" type="button">下一页</button>
+          </div>
+        </section>
+
+        <section id="paused-panel" hidden>
+          <div class="paused">
+            <h1>记忆已暂停</h1>
+            <p class="paused__lead">设置里的“启用记忆”关着。插件仍在图标轨里，但这一轮不会有任何记忆进入上下文，自动学习与提取也会被拒绝。</p>
+            <div class="paused__actions">
+              <button class="btn btn--primary" type="button" data-enable>启用记忆</button>
+              <button class="btn" type="button" data-goto-settings>打开设置</button>
+            </div>
+            <p class="paused__log" id="paused-log"></p>
+            <dl>
+              <div><dt>不再注入</dt><dd>模型下一轮拿不到任何记忆、日志或待办。</dd></div>
+              <div><dt>不再写入</dt><dd>自动学习与提取被拒绝，已有内容只读。</dd></div>
+              <div><dt>不删除数据</dt><dd id="paused-keeps">本机的记忆与日志原地不动。</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section id="settings-panel" hidden>
+          <form id="settings-form" class="settings">
+            <div class="settings__grid">
+              <section>
+                <h2 class="col__title">学习与总结</h2>
+                <p class="col__note">关闭后插件不写任何新内容，只读已有数据。</p>
+                <div class="setting">
+                  <div><p class="setting__title">启用记忆</p></div>
+                  <div class="setting__control"><label class="switch"><input id="enabled" type="checkbox" aria-label="启用记忆" /><span class="switch__track"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div><p class="setting__title">自动学习</p><p class="setting__desc">每轮结束后提取最多 3 条长期记忆，默认落在当前项目，不记录原始对话。</p></div>
+                  <div class="setting__control"><label class="switch"><input id="autoLearn" type="checkbox" aria-label="自动学习" /><span class="switch__track"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div><p class="setting__title">自动会话总结</p><p class="setting__desc">从第 2 轮开始更新当日检查点，退出前已落盘。</p></div>
+                  <div class="setting__control"><label class="switch"><input id="summarizeOnEnd" type="checkbox" aria-label="自动会话总结" /><span class="switch__track"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div><p class="setting__title">整理模型</p><p class="setting__desc">扩展 → 记忆 → 配置；密钥由宿主管理。</p></div>
+                  <div class="setting__control"><span class="model-value" id="model-info">跟随会话</span></div>
+                </div>
+              </section>
+
+              <section>
+                <h2 class="col__title">上下文预算</h2>
+                <p class="col__note">优先级：待办 → 今日日志 → 置顶 / 长期记忆 → 相关 → 昨日日志。</p>
+                <div class="setting">
+                  <div><p class="setting__title">快照模式</p><p class="setting__desc">稳定快照在数据、设置、压缩或跨天时刷新；逐轮检索每轮再挑 3 条相关记忆。</p></div>
+                  <div class="setting__control"><label class="select" style="width:132px"><select id="mode" aria-label="快照模式"><option value="stable">稳定快照</option><option value="per-turn">逐轮检索</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label></div>
+                </div>
+                <div class="setting">
+                  <div><p class="setting__title">注入今日 / 昨日日志</p></div>
+                  <div class="setting__control"><label class="switch"><input id="includeDaily" type="checkbox" aria-label="注入今日昨日日志" /><span class="switch__track"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div><p class="setting__title">注入未完成待办</p></div>
+                  <div class="setting__control"><label class="switch"><input id="includeTodos" type="checkbox" aria-label="注入未完成待办" /><span class="switch__track"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div><p class="setting__title">长期记忆条数</p><p class="setting__desc" id="cap-desc">超过上限的条目不会进入下一轮。</p></div>
+                  <div class="setting__control"><label class="input"><input id="maxMemories" type="number" min="1" max="100" required aria-label="长期记忆条数" /><span>条</span></label></div>
+                </div>
+                <div class="setting">
+                  <div><p class="setting__title">上下文总字符预算</p><p class="setting__desc">按优先级装入，整条放不下的直接跳过，不截断单条。</p></div>
+                  <div class="setting__control"><label class="input"><input id="maxChars" type="number" min="2000" max="16000" step="100" required aria-label="上下文总字符预算" /><span>字</span></label></div>
+                </div>
+                <div class="budget">
+                  <div class="budget__head"><span>按当前设置，本轮装入</span><span class="budget__value" id="budget-value">—</span></div>
+                  <div class="budget__bar" id="budget-bar"></div>
+                  <p class="budget__foot" id="budget-foot">下轮对话开始时重算</p>
+                </div>
+              </section>
+
+              <section>
+                <h2 class="col__title">数据与产物</h2>
+                <p class="col__note">产物只包含全局与当前项目的数据，卸载会删除插件私有目录。</p>
+                <div class="stack" style="margin-top:12px">
+                  <button class="btn" type="button" id="analyze">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+                    立即提取本会话
+                  </button>
+                  <button class="btn" type="button" id="copy">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>
+                    复制为 Markdown
+                  </button>
+                  <button class="btn" type="button" id="backup">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+                    生成 JSON 备份产物
+                  </button>
+                </div>
+                <p class="col__note" style="margin-top:12px">新增、编辑与模型提取都会拒绝疑似凭证；磁盘中的敏感条目也不会注入。</p>
+              </section>
+            </div>
+
+            <div class="safety">
+              <div>
+                <h2 class="col__title">数据安全</h2>
+                <p>自动学习与总结会把已隐去疑似凭证的最近 12 轮文本（每条最多 1200 字符）发给所选模型，可能产生费用。凭证检测不是绝对保证，请不要在对话中发送秘密。所有删除先进入回收站；回收站满 100 批时清理已恢复的历史，未恢复记录绝不自动淘汰，仍满时拒绝继续删除。</p>
+              </div>
+              <button class="btn btn--danger" type="button" id="clear">清空当前可见数据…</button>
+            </div>
+          </form>
+        </section>
+      </main>
+
+      <aside class="pack" id="pack" hidden>
+        <div class="pack__head"><h2>本轮上下文</h2><span class="pack__mode" id="pack-mode">稳定快照</span></div>
+        <div class="pack__figure">
+          <span class="pack__total" id="pack-total">0</span>
+          <span class="pack__budget" id="pack-budget">/ 12,000 字</span>
+          <span class="pack__pct" id="pack-pct">0%</span>
+        </div>
+        <div class="pack__bar" id="pack-bar" role="img" aria-label="预算占用"></div>
+        <p class="pack__caption">按优先级依次装入，超出预算的条目直接跳过</p>
+        <ul class="pack__legend" id="pack-legend"></ul>
+        <div class="pack__note" id="pack-note">
+          <p>长期记忆装入 <span class="mono" id="pack-picked">0</span> / <span class="mono" id="pack-visible">0</span> 条</p>
+          <small id="pack-skip-label"></small>
+          <ul id="pack-skip"></ul>
+          <button type="button" id="pack-adjust">调整条数上限</button>
+        </div>
+        <button class="pack__copy" type="button" id="pack-copy">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          复制本轮上下文
+        </button>
+        <p class="pack__foot" id="pack-foot">下轮对话开始时重算</p>
+      </aside>
+    </div>
+  </div>
+
   <dialog id="editor" aria-labelledby="editor-title">
-    <form id="editor-form"><h2 id="editor-title">新增记忆</h2>
-      <div class="field"><label for="edit-kind">类型</label><select id="edit-kind"></select></div>
-      <div class="field"><label for="edit-scope">范围（编辑已有记录不会改变归属）</label><select id="edit-scope"><option value="project">当前项目</option><option value="global">全局</option></select></div>
-      <div class="row" id="pin-field"><label for="edit-pinned">置顶</label><input id="edit-pinned" type="checkbox" /></div>
-      <div class="field"><label for="edit-content">内容（不要保存密码、密钥、令牌）</label><textarea id="edit-content" maxlength="2000" required></textarea><span id="char-count" class="muted">0 / 2000</span></div>
-      <p id="editor-error" role="alert" class="danger"></p>
-      <div class="row footer"><button type="button" id="cancel-edit">取消</button><button type="submit" class="primary" id="save-edit">保存</button></div>
+    <form id="editor-form">
+      <div class="dialog__head">
+        <div>
+          <h2 id="editor-title">新增记忆</h2>
+          <p class="dialog__lead" id="editor-lead"></p>
+        </div>
+        <button class="btn btn--icon" type="button" id="cancel-edit" aria-label="关闭">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="field__row">
+        <div class="field" id="kind-content">
+          <label for="edit-kind">类型</label>
+          <label class="select" style="margin-top:6px"><select id="edit-kind"></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
+        </div>
+        <div class="field">
+          <label for="edit-scope">范围</label>
+          <div class="segmented" style="margin-top:6px" id="scope-segmented">
+            <button type="button" data-scope="project">当前项目</button>
+            <button type="button" data-scope="global">全局</button>
+          </div>
+          <select id="edit-scope" hidden><option value="project">当前项目</option><option value="global">全局</option></select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="edit-content">内容</label>
+        <textarea id="edit-content" maxlength="2000" required></textarea>
+        <div class="field__foot"><span>不要保存密码、密钥或令牌</span><span class="mono" id="char-count">0 / 2000</span></div>
+      </div>
+      <div class="dialog__row" id="pin-field">
+        <label class="dialog__toggle" for="edit-pinned">
+          <span class="switch"><input id="edit-pinned" type="checkbox" /><span class="switch__track"></span></span>
+          置顶（优先装入下一轮）
+        </label>
+        <span class="dialog__budget" id="editor-budget"></span>
+      </div>
+      <p class="dialog__error" id="editor-error" role="alert"></p>
+      <div class="dialog__foot">
+        <button class="btn" type="button" id="save-cancel">取消</button>
+        <button class="btn btn--primary" type="button" id="save-edit">保存</button>
+      </div>
     </form>
   </dialog>
-  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><h2 id="confirm-title">确认操作</h2><p id="confirm-text"></p><div class="row footer"><button id="confirm-no" type="button">取消</button><button id="confirm-yes" class="danger" type="button">确认</button></div></dialog>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <h2 id="confirm-title">确认操作</h2>
+    <p class="dialog__lead" id="confirm-text"></p>
+    <div class="dialog__foot">
+      <button class="btn" type="button" id="confirm-no">取消</button>
+      <button class="btn btn--danger" type="button" id="confirm-yes">确认</button>
+    </div>
+  </dialog>
+
   <script>
     const $ = (id) => document.getElementById(id);
     const labels = { preference:'偏好', fact:'事实', decision:'决定', lesson:'经验', project:'项目约定', feedback:'反馈', note:'记录', summary:'会话总结', handoff:'压缩交接' };
+    const sourceName = { memories:'长期记忆', logs:'每日日志', todos:'待办' };
+    const ICONS = {
+      pencil:'<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+      pin:'<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+      trash:'<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+      check:'<path d="M20 6 9 17l-5-5"/>',
+      undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
+      restore:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+      pencilLine:'<path d="M13 21h8"/><path d="M15 5 5 15"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+      pause:'<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+      play:'<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/>',
+      search:'<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+      chevronLeft:'<path d="m15 18-6-6 6-6"/>',
+      chevronRight:'<path d="m9 18 6-6-6-6"/>',
+      chevronDown:'<path d="m6 9 6 6 6-6"/>'
+    };
+    const svg = (name, size = 14) => `<svg aria-hidden="true" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] ?? ''}</svg>`;
+    const nf = (value) => Number(value || 0).toLocaleString('en-US');
+    const projectName = (path) => {
+      if (!path) return '全局';
+      const clean = String(path).replace(/[/\\]+$/, '');
+      return clean.split(/[/\\]/).pop() || clean;
+    };
+    const hhmm = (value) => new Date(value).toTimeString().slice(0, 5);
+    function when(value) {
+      const date = new Date(value), now = new Date();
+      const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+      if (sameDay(date, now)) return `今天 ${hhmm(value)}`;
+      if (sameDay(date, yesterday)) return `昨天 ${hhmm(value)}`;
+      return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm(value)}`;
+    }
+
     let tab = 'memory', offset = 0, nextOffset = null, status = null, sequence = 0, edit = null, busy = false, debounce;
-    let lastStatusAt = 0, lastLoadedAt = 0, dirty = false;
+    let lastStatusAt = 0, lastLoadedAt = 0, dirty = false, weekDates = [];
     const history = [];
+    const railTabs = ['memory', 'daily', 'todos'];
     const call = (name, args = {}) => window.enso.call(name, args);
     const today = new Date();
-    $('date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const iso = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    $('date').value = iso(today);
+
     function notice(text, error = false) { $('notice').textContent = text; $('notice').dataset.error = String(error); }
     function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
-    function button(text, handler, className = 'small') { const node = element('button', text, className); node.type = 'button'; node.onclick = handler; return node; }
+    function button(text, handler, className = 'btn btn--sm') { const node = element('button', text, className); node.type = 'button'; node.onclick = handler; return node; }
+    function iconButton(name, label, handler, attrs = {}) {
+      const node = element('button'); node.type = 'button'; node.innerHTML = svg(name);
+      node.title = label; node.setAttribute('aria-label', label);
+      for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+      node.onclick = handler;
+      return node;
+    }
+
     async function action(work, message = '已保存') {
       if (busy) return;
       busy = true; document.body.setAttribute('aria-busy', 'true');
@@ -156,25 +662,44 @@
       $('confirm-yes').onclick = () => { $('confirm-dialog').close(); action(work, '操作完成，可在最近删除中恢复'); };
     }
     $('confirm-no').onclick = () => $('confirm-dialog').close();
+
     function openEditor(target, record = null) {
       edit = { target, record }; $('editor-error').textContent = '';
       $('editor-title').textContent = `${record ? '编辑' : '新增'}${target === 'daily' ? '日志' : target === 'todos' ? '待办' : '记忆'}`;
+      $('editor-lead').textContent = `${record ? '修改后将替换原记录' : '会存进'} · ${projectName(status?.project)}`;
       const kinds = target === 'daily' ? ['note','summary','handoff'] : ['preference','fact','decision','lesson','project','feedback'];
       $('edit-kind').replaceChildren(...kinds.map((key) => { const node = element('option', labels[key]); node.value = key; return node; }));
       $('edit-kind').value = record?.kind ?? (target === 'daily' ? 'note' : 'fact');
-      $('edit-kind').parentElement.hidden = target === 'todos';
+      $('kind-content').hidden = target === 'todos';
       $('edit-scope').value = record?.scope ?? (status?.project ? 'project' : 'global');
       $('edit-scope').disabled = !!record;
       $('edit-scope').querySelector('[value="project"]').disabled = !status?.project;
+      paintScope($('edit-scope').value);
       $('pin-field').hidden = target !== 'memory'; $('edit-pinned').checked = record?.pinned ?? false;
       $('edit-content').value = record?.content ?? record?.text ?? '';
       $('char-count').textContent = `${$('edit-content').value.length} / 2000`;
+      paintEditorBudget();
+      $('save-edit').disabled = false;
       $('editor').showModal(); $('edit-content').focus();
     }
-    $('edit-content').oninput = () => { $('char-count').textContent = `${$('edit-content').value.length} / 2000`; };
+    function paintScope(value) {
+      for (const node of $('scope-segmented').children) node.setAttribute('aria-pressed', String(node.dataset.scope === value));
+    }
+    function paintEditorBudget() {
+      const length = $('edit-content').value.length;
+      $('editor-budget').textContent = `本轮预算 +${nf(length)} 字`;
+    }
+    $('scope-segmented').onclick = (event) => {
+      const node = event.target.closest('[data-scope]'); if (!node || node.disabled || $('edit-scope').disabled) return;
+      $('edit-scope').value = node.dataset.scope; paintScope(node.dataset.scope);
+    };
+    $('edit-content').oninput = () => { $('char-count').textContent = `${$('edit-content').value.length} / 2000`; paintEditorBudget(); };
     $('cancel-edit').onclick = () => $('editor').close();
-    $('editor-form').onsubmit = async (event) => {
-      event.preventDefault(); if ($('save-edit').disabled) return; $('save-edit').disabled = true;
+    $('save-cancel').onclick = () => $('editor').close();
+    // 宿主以 sandbox="allow-scripts"（无 allow-forms）挂载插件，原生表单提交会被浏览器拦掉，
+    // 保存必须由按钮直接调用，不能依赖 submit 事件。
+    async function submitEditor() {
+      if ($('save-edit').disabled) return; $('save-edit').disabled = true;
       const args = { content: $('edit-content').value, scope: $('edit-scope').value };
       if (edit.record) args.id = edit.record.id;
       try {
@@ -183,100 +708,331 @@
         $('editor').close(); notice('已保存'); lastStatusAt = 0; offset = 0; history.length = 0; await load();
       } catch (error) { $('editor-error').textContent = error.message; }
       finally { $('save-edit').disabled = false; }
-    };
-    function renderItem(row, source) {
-      const item = element('article', undefined, `item${row.done ? ' done' : ''}`);
-      const meta = element('div', undefined, 'meta');
-      meta.append(element('span', row.pinned ? '◆ 置顶' : source === 'daily' ? row.date : source === 'todos' ? (row.done ? '已完成' : '待完成') : labels[row.kind] ?? '记忆', 'badge'));
-      meta.append(element('span', row.scope === 'global' ? '全局' : '当前项目'));
-      meta.append(element('span', new Date(row.updatedAt).toLocaleString()));
-      if (row.source === 'auto') meta.append(element('span', '自动整理'));
-      const body = element('p', row.content ?? row.text, 'body');
-      const actions = element('div', undefined, 'row');
-      actions.append(button('编辑', () => openEditor(source, row)));
-      if (source === 'memory') actions.append(button(row.pinned ? '取消置顶' : '置顶', () => action(() => call('save', { id:row.id, content:row.content ?? row.text, pinned:!row.pinned }))));
-      if (source === 'todos') actions.append(button(row.done ? '标为未完成' : '完成', () => action(() => call('scratchpad', { action:row.done ? 'undo' : 'done', id:row.id }))));
-      actions.append(button('删除', () => confirmAction('此条将移到最近删除，可恢复。确定删除？', () => call('forget', { ids:[row.id], target:source === 'daily' ? 'daily' : source === 'todos' ? 'scratchpad' : 'long_term' })), 'small danger'));
-      item.append(meta, body, actions); return item;
     }
-    function renderTrash(row) {
-      const item = element('article', undefined, 'item');
-      item.append(element('p', `${row.count} 条 · ${new Date(row.deletedAt).toLocaleString()}`, 'meta'), element('p', row.preview, 'body'));
-      if (row.restoredAt) item.append(element('span', '已恢复', 'badge'));
-      else item.append(button('恢复这一批', () => action(() => call('restore', { recoveryId:row.id }), '已恢复')));
+    $('save-edit').onclick = () => void submitEditor();
+    $('editor-form').onsubmit = (event) => { event.preventDefault(); void submitEditor(); };
+    $('edit-content').onkeydown = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); void submitEditor(); }
+    };
+
+    function deleteRecord(row, source) {
+      return () => confirmAction('此条将移到最近删除，可恢复。确定删除？', () => call('forget', { ids:[row.id], target:source === 'daily' ? 'daily' : source === 'todos' ? 'scratchpad' : 'long_term' }));
+    }
+    function renderItem(row, source) {
+      const isLog = source === 'daily';
+      const item = element('article', undefined, `item${row.done ? ' done' : ''}${isLog ? ' item--log' : ''}`);
+      const meta = element('div', undefined, 'item__meta');
+      meta.append(element('span', labels[row.kind] ?? '记忆', 'kind'));
+      if (row.pinned) meta.append(element('span', '◆ 置顶', 'pin'));
+      meta.append(element('span', '·', 'dot'), element('span', row.scope === 'global' ? '全局' : '当前项目', 'meta'));
+      if (row.source === 'auto') meta.append(element('span', '自动整理', 'meta'));
+      if (!isLog) meta.append(element('span', when(row.updatedAt), 'time'));
+      const actions = element('div', undefined, 'actions');
+      actions.append(iconButton('pencil', '编辑', () => openEditor(source, row)));
+      if (source === 'memory') {
+        actions.append(iconButton('pin', row.pinned ? '取消置顶' : '置顶', () => action(() => call('save', { id:row.id, content:row.content ?? row.text, pinned:!row.pinned })), { 'aria-pressed': String(!!row.pinned) }));
+      }
+      actions.append(iconButton('trash', '删除', deleteRecord(row, source), { 'data-danger': '' }));
+      meta.append(actions);
+      const body = element('p', row.content ?? row.text, 'item__body');
+      if (isLog) {
+        const column = element('div');
+        column.append(meta, body);
+        item.append(element('span', hhmm(row.updatedAt), 'item__time'), column);
+      } else item.append(meta, body);
       return item;
     }
+    function renderTodo(row, source) {
+      const item = element('article', undefined, `todo${row.done ? ' todo--done' : ''}`);
+      const check = element('span', undefined, 'check');
+      check.dataset.on = String(!!row.done);
+      if (row.done) check.innerHTML = svg('check', 12);
+      const main = element('div', undefined, 'todo__main');
+      main.append(element('p', row.text ?? row.content, 'todo__text'));
+      const meta = element('div', undefined, 'todo__meta');
+      meta.append(element('span', row.scope === 'global' ? '全局' : '当前项目'), element('span', when(row.updatedAt)));
+      main.append(meta);
+      const actions = element('div', undefined, 'actions');
+      actions.append(iconButton(row.done ? 'undo' : 'check', row.done ? '标为未完成' : '完成', () => action(() => call('scratchpad', { action:row.done ? 'undo' : 'done', id:row.id }))));
+      actions.append(iconButton('pencil', '编辑', () => openEditor(source, row)));
+      actions.append(iconButton('trash', '删除', deleteRecord(row, source), { 'data-danger': '' }));
+      item.append(check, main, actions);
+      return item;
+    }
+    function renderTrash(row) {
+      const item = element('article', undefined, 'batch');
+      const head = element('div', undefined, 'batch__head');
+      head.append(element('span', `${row.count} 条`, 'batch__count'), element('span', when(row.deletedAt), 'batch__time'));
+      const body = element('div');
+      const list = element('div', undefined, 'batch__list');
+      for (const line of row.previews ?? [row.preview]) list.append(element('p', line, 'batch__line'));
+      body.append(list);
+      const sources = Object.entries(row.sources ?? {}).map(([key, count]) => `${sourceName[key] ?? key} ${count}`);
+      if (sources.length) body.append(element('p', `${sources.join(' · ')} · 属于${status?.project ? '当前项目' : '全局'}`, 'batch__source'));
+      const tail = element('div');
+      if (row.restoredAt) tail.append(element('span', '已恢复', 'tag'));
+      else tail.append(button('恢复这一批', () => action(() => call('restore', { recoveryId:row.id }), '已恢复'), 'btn btn--sm'));
+      item.append(head, body, tail);
+      return item;
+    }
+
+    function renderWeek() {
+      const week = $('week');
+      if (tab !== 'daily') { week.replaceChildren(); week.hidden = true; return; }
+      week.hidden = false;
+      const base = new Date(`${$('date').value}T12:00:00`);
+      const step = (days) => { const next = new Date(base); next.setDate(next.getDate() + days); $('date').value = iso(next); reset(); };
+      const nodes = [iconButton('chevronLeft', '上一周', () => step(-7), { class: 'week__nav' })];
+      for (let back = 6; back >= 0; back -= 1) {
+        const date = new Date(base); date.setDate(date.getDate() - back);
+        const key = iso(date);
+        const node = button('', () => { $('date').value = key; reset(); }, 'week__day');
+        node.dataset.has = String(weekDates.includes(key));
+        if (key === $('date').value) node.setAttribute('aria-current', 'date');
+        node.append(element('span', ['日','一','二','三','四','五','六'][date.getDay()], 'week__day-name'), element('span', String(date.getDate()), 'week__num'));
+        nodes.push(node);
+      }
+      const next = iconButton('chevronRight', '下一周', () => step(7), { class: 'week__nav' });
+      next.disabled = iso(new Date()) <= $('date').value;
+      nodes.push(next);
+      const label = base.getTime() >= new Date(new Date().toDateString()).getTime()
+        ? '今天'
+        : `${base.getMonth() + 1}月${base.getDate()}日`;
+      nodes.push(element('span', label, 'week__label'));
+      week.replaceChildren(...nodes);
+    }
+
+    function paintTabs() {
+      const values = { memory: status?.memories ?? 0, daily: status?.logs ?? 0, todos: status?.todos ?? 0, trash: status?.recoverable ?? 0 };
+      for (const node of document.querySelectorAll('[data-count]')) node.textContent = values[node.dataset.count] ?? '';
+    }
+    function paintPaused() {
+      $('paused-log').textContent = '暂停期间数据与设置都保留，随时可以再启用。';
+      $('paused-keeps').textContent = `本机留着的 ${status?.memories ?? 0} 条记忆与 ${status?.logs ?? 0} 篇日志原地不动。`;
+    }
+
+    function renderPack(report) {
+      if (!report) return;
+      $('pack-mode').textContent = report.mode === 'per-turn' ? '逐轮检索' : '稳定快照';
+      $('pack-total').textContent = nf(report.total);
+      $('pack-budget').textContent = `/ ${nf(report.budget)} 字`;
+      $('pack-pct').textContent = `${Math.round((report.total / Math.max(1, report.budget)) * 100)}%`;
+      const bar = $('pack-bar');
+      bar.replaceChildren(...report.sections.filter((section) => section.included > 0).map((section) => {
+        const seg = element('span', undefined, `pack__seg pack__seg--${section.key}`);
+        seg.style.width = `${(section.chars / Math.max(1, report.budget)) * 100}%`;
+        return seg;
+      }));
+      const legend = $('pack-legend');
+      legend.replaceChildren(...report.sections.map((section) => {
+        const row = element('li', undefined, 'pack__row');
+        row.dataset.empty = String(!section.included);
+        row.dataset.key = section.key;
+        row.append(element('span', undefined, 'pack__swatch'));
+        row.append(element('span', section.title, 'pack__label'));
+        if (!section.on) row.append(element('span', '未启用', 'pack__off'));
+        row.append(element('span', section.included ? `${section.included} 条` : '—', 'pack__rows'));
+        row.append(element('span', section.included ? nf(section.chars) : '0', 'pack__chars'));
+        return row;
+      }));
+      const memory = report.sections.find((section) => section.key === 'memory');
+      const visible = report.memoryVisible ?? 0;
+      const picked = memory?.rows ?? 0;
+      $('pack-picked').textContent = nf(picked);
+      $('pack-visible').textContent = nf(visible);
+      const skipped = Math.max(0, visible - (memory?.included ?? 0));
+      $('pack-skip-label').textContent = skipped ? `没进这一包的 ${skipped} 条（前三条）` : '全部收下了';
+      $('pack-skip').replaceChildren(...(report.skipped ?? []).map((line) => element('li', line)));
+      $('pack-adjust').textContent = skipped ? '调整条数上限' : '调整上限';
+      $('pack-foot').textContent = `${report.mode === 'per-turn' ? '每轮重算' : '数据或设置变化时刷新'} · 下轮对话开始时重算`;
+      $('cap-desc').textContent = visible > picked ? `当前 ${picked} 条，另外 ${visible - picked} 条不进下一轮。` : '超过上限的条目不会进入下一轮。';
+      $('budget-value').textContent = `${nf(report.total)} / ${nf(report.budget)} 字`;
+      $('budget-bar').replaceChildren(...report.sections.filter((section) => section.included > 0).map((section) => {
+        const seg = element('span', undefined, 'budget__seg');
+        seg.style.width = `${(section.chars / Math.max(1, report.budget)) * 100}%`;
+        return seg;
+      }));
+      $('budget-foot').textContent = `占用 ${Math.round((report.total / Math.max(1, report.budget)) * 100)}% · 预算还有 ${nf(Math.max(0, report.budget - report.total))} 字`;
+    }
+    let railWide = null;
+    async function loadPack() {
+      const wide = document.body.getBoundingClientRect().width > 1180;
+      railWide = wide;
+      if (!railTabs.includes(tab) || !status?.enabled || !wide) { $('pack').hidden = true; return; }
+      $('pack').hidden = false;
+      try { renderPack(await call('context')); }
+      catch (error) { notice(error.message ?? String(error), true); }
+    }
+    $('pack-adjust').onclick = () => { setTab('settings'); $('maxMemories').focus(); };
+    $('pack-copy').onclick = () => action(() => call('copy_context'), '本轮上下文已复制');
+    document.querySelector('[data-enable]').onclick = () => action(() => call('settings', { ...status.settings, enabled: true }), '记忆已启用，下轮生效');
+    document.querySelector('[data-goto-settings]').onclick = () => setTab('settings');
+
     function showSettings() {
       for (const [key,value] of Object.entries(status.settings)) { const input = $(key); if (!input) continue; if (input.type === 'checkbox') input.checked = value; else input.value = value; }
-      $('model-info').textContent = `当前整理模型：${status.model ?? '跟随会话'}`;
+      $('model-info').textContent = !status.model || status.model === 'session' ? '跟随会话' : status.model;
     }
+
     async function load() {
       const request = ++sequence;
       try {
         const latest = status && Date.now()-lastStatusAt < 1000 ? status : await call('status');
         if (request !== sequence) return; status = latest; lastStatusAt = Date.now(); dirty = false;
-        $('state-badge').textContent = status.enabled ? '本地记忆 · 已启用' : '记忆已暂停';
-        $('project').textContent = status.project ? `全局 ＋ ${status.project}` : '当前无项目，仅显示全局记忆';
-        $('counts').textContent = `${status.memories} 条记忆 · ${status.todos} 项待办 · ${status.recoverable} 批可恢复`;
-        const settings = tab === 'settings'; $('settings-panel').hidden = !settings; $('browser').hidden = settings;
-        if (settings) { showSettings(); return; }
+        const settingsTab = tab === 'settings';
+        const paused = !status.enabled && tab !== 'trash' && tab !== 'settings';
+        $('project').textContent = projectName(status.project);
+        $('scope').title = status.project ?? '当前无项目，仅显示全局记忆';
+        $('counts').textContent = `${status.memories} 条记忆 · ${status.logs} 篇日志 · ${status.todos} 项待办`;
+        paintTabs();
+        $('settings-panel').hidden = !settingsTab; $('paused-panel').hidden = !paused;
+        $('browser').hidden = settingsTab || paused;
+        $('search-field').hidden = settingsTab || tab === 'trash';
+        $('add').hidden = settingsTab || tab === 'trash' || paused;
+        $('save-settings').hidden = !settingsTab;
+        $('pack').hidden = settingsTab || paused || tab === 'trash';
+        $('refresh').hidden = false;
+        if (paused) paintPaused();
+        if (settingsTab) { showSettings(); await loadPack(); return; }
+        if (paused) return;
         const query = $('search').value.trim(), searching = !!query;
-        $('kind').hidden = tab !== 'memory' || searching; $('scope').hidden = !['memory','todos'].includes(tab) || searching;
-        $('date').hidden = tab !== 'daily' || searching; $('todo-filter').hidden = tab !== 'todos' || searching;
-        $('search').hidden = tab === 'trash'; $('add').hidden = tab === 'trash' || searching;
+        $('kind-field').hidden = tab !== 'memory' || searching;
+        $('scope-field').hidden = !['memory','todos'].includes(tab) || searching;
+        // The week strip (with ‹ ›) is the date control; the input only holds state.
+        $('date-field').hidden = true;
+        $('todo-field').hidden = tab !== 'todos' || searching;
+        $('sort-label').hidden = searching || tab === 'trash' || tab === 'daily';
+        $('todo-actions').hidden = tab !== 'todos' || searching;
+        $('search-hint').hidden = !searching;
+        $('trash-hint').hidden = tab !== 'trash';
+        $('add-label').textContent = tab === 'todos' ? '加待办' : tab === 'daily' ? '写日志' : '记一条';
         $('add').disabled = !status.enabled;
-        $('todo-actions').hidden = tab !== 'todos' || searching; $('search-hint').hidden = !searching;
-        $('add').textContent = tab === 'todos' ? '＋ 加待办' : tab === 'daily' ? '＋ 写日志' : '＋ 记一条';
+        renderWeek();
         let result;
         if (tab === 'trash') result = await call('trash', { offset,limit:6 });
         else if (!status.enabled) result = { items:[],count:0,nextOffset:null };
         else if (searching) result = await call('search', { query,offset,limit:6 });
-        else result = await call('read', { target:tab === 'daily' ? 'daily' : tab === 'todos' ? 'scratchpad' : 'long_term',offset,limit:6,
-          ...(tab === 'daily' ? { date:$('date').value } : {}), ...(tab === 'memory' && $('kind').value ? { kind:$('kind').value } : {}),
+        else if (tab === 'daily') {
+          const dates = await call('read', { target:'list_daily' });
+          weekDates = dates.dates ?? [];
+          const date = validDateOrToday($('date').value);
+          $('date').value = date;
+          renderWeek();
+          result = await call('read', { target:'daily', date, offset, limit:6 });
+        }
+        else result = await call('read', { target: tab === 'todos' ? 'scratchpad' : 'long_term', offset, limit:6,
+          ...(tab === 'memory' && $('kind').value ? { kind:$('kind').value } : {}),
           ...(tab === 'todos' && $('todo-filter').value !== 'all' ? { done:$('todo-filter').value === 'done' } : {}),
           ...(['memory','todos'].includes(tab) && $('scope').value ? { scope:$('scope').value } : {}) });
         if (request !== sequence) return;
         nextOffset = result.nextOffset;
-        const rows = result.items ?? result.results;
+        const rows = result.items ?? result.results ?? [];
         const filtered = tab === 'todos' && !searching ? rows.filter((row) => $('todo-filter').value === 'all' || row.done === ($('todo-filter').value === 'done')) : rows;
-        $('items').replaceChildren(...filtered.map((row) => tab === 'trash' ? renderTrash(row) : renderItem(row, searching ? ({ memory:'memory',daily:'daily',scratchpad:'todos' }[row.source]) : tab)));
-        if (!filtered.length) {
-          const empty = element('div', undefined, 'empty');
-          empty.append(element('strong', !status.enabled && tab !== 'trash' ? '记忆已暂停' : searching ? '没有找到匹配内容' : tab === 'trash' ? '还没有删除记录' : '这里还很安静'));
-          empty.append(element('p', !status.enabled ? '到设置中启用后继续。' : searching ? '试试更短的关键词，或 #标签。' : tab === 'trash' ? '删除的内容会先保存在这里。' : '手动添加，或在对话里说“请记住……”。')); $('items').append(empty);
+        let nodes;
+        if (tab === 'todos' && !searching) {
+          // Open work first; the completed tail is a group, not a mixed-in row.
+          const ordered = [...filtered].sort((a, b) => Number(!!a.done) - Number(!!b.done) || new Date(b.updatedAt) - new Date(a.updatedAt));
+          nodes = [];
+          let groupAdded = false;
+          for (const row of ordered) {
+            if (row.done && !groupAdded) { groupAdded = true; nodes.push(todoGroup(ordered.filter((entry) => entry.done).length)); }
+            nodes.push(renderTodo(row, 'todos'));
+          }
+        } else {
+          nodes = filtered.map((row) => {
+            if (tab === 'trash') return renderTrash(row);
+            const source = searching ? ({ memory:'memory',daily:'daily',scratchpad:'todos' }[row.source]) : tab;
+            return source === 'todos' ? renderTodo(row, 'todos') : renderItem(row, source);
+          });
         }
+        $('items').replaceChildren(...nodes);
+        if (!filtered.length) $('items').append(emptyState(searching));
+        // 日志页永远留一个「写一条」入口，空的一天更需要它。
+        if (tab === 'daily' && !searching) $('items').append(composer());
         $('page').textContent = `共 ${result.count} 条 · ${offset + (rows.length ? 1 : 0)}–${offset+rows.length}`;
         $('prev').disabled = !history.length; $('next').disabled = nextOffset === null;
+        $('pager').hidden = !filtered.length;
         lastLoadedAt = Date.now();
-      } catch (error) { if (request === sequence) { notice(error.message ?? String(error), true); $('state-badge').textContent = '读取失败'; } }
+        await loadPack();
+      } catch (error) { if (request === sequence) { notice(error.message ?? String(error), true); } }
+    }
+    const validDateOrToday = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : iso(new Date());
+    function emptyState(searching) {
+      const paused = !status.enabled && tab !== 'trash';
+      const copy = {
+        memory: ['这里还很安静', '手动添加，或在对话里说“请记住……”。'],
+        daily: ['今天还没有记录', '写一条，或等它自动总结今天的对话。'],
+        todos: ['没有待办', '点右上角加一条，完成后会归到下面。'],
+        trash: ['还没有删除记录', '删除的内容会先保存在这里，可恢复。'],
+      };
+      const [title, body] = searching
+        ? ['没有找到匹配内容', '试试更短的关键词，或 #标签。']
+        : paused
+          ? ['记忆已暂停', '到设置中启用后继续。']
+          : (copy[tab] ?? copy.memory);
+      const empty = element('div', undefined, 'empty');
+      empty.append(element('strong', title), element('p', body));
+      return empty;
+    }
+    function todoGroup(done) {
+      const group = element('div', undefined, 'group');
+      group.append(element('span', '已完成'), element('span', done, 'tab__count'));
+      return group;
+    }
+    function composer() {
+      const node = button('', () => openEditor('daily'), 'composer');
+      const text = element('span');
+      text.append(element('span', '写一条今天的日志…'));
+      text.append(element('small', '点开填写 · 疑似凭证会先被拦下'));
+      node.innerHTML = svg('pencilLine', 14);
+      node.append(text);
+      return node;
     }
     const reset = () => { offset = 0; history.length = 0; load(); };
-    $('tabs').onclick = (event) => { const node = event.target.closest('[data-tab]'); if (!node) return; tab = node.dataset.tab; for (const button of $('tabs').children) button.setAttribute('aria-selected', String(button === node)); $('search').value = ''; reset(); };
+
+    function setTab(next) {
+      tab = next;
+      notice('');
+      for (const node of $('tabs').children) node.setAttribute('aria-selected', String(node.dataset.tab === next));
+      $('search').value = '';
+      reset();
+    }
+    $('tabs').onclick = (event) => { const node = event.target.closest('[data-tab]'); if (!node || node.dataset.tab === tab) return; setTab(node.dataset.tab); };
     $('tabs').onkeydown = (event) => {
       const buttons = [...$('tabs').children], index = buttons.indexOf(event.target);
       const destination = event.key === 'ArrowRight' ? (index+1)%buttons.length : event.key === 'ArrowLeft' ? (index+buttons.length-1)%buttons.length : event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length-1 : -1;
       if (destination < 0) return; event.preventDefault(); buttons[destination].focus(); buttons[destination].click();
     };
     $('search').oninput = () => { clearTimeout(debounce); debounce = setTimeout(reset, 220); };
-    for (const id of ['kind','scope','date','todo-filter']) $(id).onchange = reset;
+    for (const id of ['kind','scope','date','todo-filter']) $(id).onchange = () => { if (id === 'date') renderWeek(); reset(); };
     $('refresh').onclick = () => { notice(''); lastStatusAt = 0; load(); };
     $('add').onclick = () => openEditor(tab);
     $('prev').onclick = () => { offset = history.pop() ?? 0; load(); };
     $('next').onclick = () => { if (nextOffset === null) return; history.push(offset); offset = nextOffset; load(); };
     $('clear-done').onclick = () => confirmAction('把当前项目和全局的已完成待办移到最近删除？', () => call('scratchpad', { action:'clear_done' }));
-    $('settings-form').onsubmit = (event) => {
-      event.preventDefault(); const values = {};
+    function saveSettings() {
+      const values = {};
       for (const key of Object.keys(status.settings)) { const input = $(key); values[key] = input.type === 'checkbox' ? input.checked : input.type === 'number' ? Number(input.value) : input.value; }
-      action(() => call('settings', values), '设置已保存，下轮生效');
-    };
+      void action(() => call('settings', values), '设置已保存，下轮生效');
+    }
+    $('save-settings').onclick = saveSettings;
+    $('settings-form').onsubmit = (event) => { event.preventDefault(); saveSettings(); };
     $('analyze').onclick = () => action(() => call('analyze'), (result) => result.error ? `提取失败：${result.error}` : result.skipped ? result.reason ?? '尚无已完成的本会话对话可提取，或结果已过期' : `提取完成：新增 ${result.learned} 条记忆${result.summarized ? '，已更新会话总结' : ''}`);
     $('copy').onclick = () => action(() => call('copy_markdown'), '已复制全局和当前项目的 Markdown');
     $('backup').onclick = () => action(() => call('export_backup'), (result) => `备份产物已生成：${result.name}（${result.id}）。可在会话产物中查看。`);
     $('clear').onclick = () => confirmAction('将清空【当前项目＋全局】的全部记忆、日志和待办，不影响其他项目。内容进入最近删除。请确认已备份。', () => call('clear', { confirm:'CLEAR' }));
-    const applyTheme = (theme) => { document.documentElement.dataset.theme = theme; };
+    const applyTheme = (theme) => {
+      document.documentElement.dataset.theme = theme;
+      // 原生弹层（select 菜单、滚动条）跟随主题，而不是系统浅色。
+      document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+    };
     applyTheme(window.enso.theme); window.enso.onTheme(applyTheme);
     const visible = () => document.visibilityState !== 'hidden' && document.body.getBoundingClientRect().width > 0;
-    const refreshDirty = () => { if (dirty && visible() && tab !== 'settings' && !busy) { lastStatusAt = 0; load(); } };
+    const refreshDirty = () => {
+      // Crossing the ledger's breakpoint has to re-render it, not wait for a mutation.
+      const wide = document.body.getBoundingClientRect().width > 1180;
+      if (wide !== railWide && railTabs.includes(tab) && status?.enabled && !busy) void loadPack();
+      if (dirty && visible() && !busy) { lastStatusAt = 0; load(); }
+    };
     window.enso.on('memory-changed', () => {
       dirty = true;
       if (!visible() || busy || tab === 'settings') return;

@@ -851,6 +851,36 @@ export const IPC_PRODUCT_COVERAGE = {
   EXTENSION_PLUGINS_AUTHORING_STAGE: excluded(
     'Desktop-only plugin draft permission preview; never commits installation.'
   ),
+  EXTENSION_PLUGINS_AUTHORING_CONTEXT: excluded(
+    'Desktop-only current-host capability snapshot and workspace-owned draft list.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_OPEN: excluded(
+    'Desktop-only rebind/recover authoring code; never installs or exposes private data.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_INSPECT: excluded(
+    'Desktop-only content-bound authoring checks, not a model capability.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_TEST: excluded(
+    'Explicitly confirmed local Node tests in a credential-stripped snapshot.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_TRIAL: excluded(
+    'Desktop-only permission preview for a separate trial identity.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_TRIAL_LOADED: excluded(
+    'Desktop-only trial code version check; cannot bypass plugin invocation permissions.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_TRIAL_FINISH: excluded(
+    'Confirmed removal of the exact authoring trial, not production data.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_EXPORT: excluded(
+    'Native save dialog exports validated ZIP; no arbitrary renderer path.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_EVIDENCE: excluded(
+    'User-reported content-bound business/model verification, never automated proof.'
+  ),
+  EXTENSION_PLUGINS_AUTHORING_ROLLBACK: excluded(
+    'Desktop-only prior-code permission preview, not data rollback or automatic installation.'
+  ),
   EXTENSION_PLUGINS_STAGE_PATH: surfaces('tools.list'),
   EXTENSION_PLUGINS_STAGE_URL: surfaces('tools.list'),
   EXTENSION_PLUGINS_CALL: excluded('Runtime plugin UI call from the trusted renderer.'),

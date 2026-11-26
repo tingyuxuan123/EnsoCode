@@ -253,7 +253,13 @@ export class ExtensionPluginService {
   private readonly agentRuns = new Map<string, Map<string, () => void>>();
   private readonly staged = new Map<
     string,
-    { staged: StagedPlugin; at: number; owner: number; source: PluginInstallSource }
+    {
+      staged: StagedPlugin;
+      at: number;
+      owner: number;
+      source: PluginInstallSource;
+      authoringBase?: { build: string | null; rollback: boolean };
+    }
   >();
   private readonly idTails = new Map<string, Promise<void>>();
   private readonly stopping = new Map<string, Promise<void>>();
@@ -661,6 +667,31 @@ export class ExtensionPluginService {
     discardStaged(this.options.root, entry.staged);
     return true;
   }
+  /** A validated immutable authoring snapshot, with its real source retained for explicit reload. */
+  async stageAuthoringSnapshot(
+    snapshot: string,
+    sourceDirectory: string,
+    owner: number,
+    signal?: AbortSignal,
+    rollback = false,
+    expectedBuild?: string | null
+  ) {
+    const result = await this.stage({ kind: 'dir', path: snapshot }, owner, signal);
+    if (result.ok) {
+      const entry = this.staged.get(result.preview.token);
+      if (entry) {
+        entry.source = { kind: 'dir', path: sourceDirectory };
+        entry.authoringBase = {
+          build:
+            expectedBuild === undefined
+              ? (this.installedPackage(result.preview.id)?.build ?? null)
+              : expectedBuild,
+          rollback,
+        };
+      }
+    }
+    return result;
+  }
   releaseOwner(owner: number): void {
     for (const [token, e] of this.staged) if (e.owner === owner) this.discard(token, owner);
   }
@@ -680,6 +711,19 @@ export class ExtensionPluginService {
     if (!entry || entry.owner !== owner || this.disposed)
       return { ok: false, error: '安装已过期或应用已关闭' };
     const { staged } = entry;
+    if (entry.authoringBase) {
+      const current = this.installedPackage(staged.manifest.id);
+      if (
+        (current?.build ?? null) !== entry.authoringBase.build ||
+        (!entry.authoringBase.rollback &&
+          current &&
+          !isNewerPluginVersion(staged.manifest.version, current.version))
+      ) {
+        this.staged.delete(token);
+        discardStaged(this.options.root, staged);
+        return { ok: false, error: '制作预览后已安装版本发生变化，或版本未递增；请重新检查并确认' };
+      }
+    }
     // 暂存到提交之间可能有别的窗口装好同 id 的插件（或换了来源）。
     // 市场来源必须在 ID 锁内、落盘前再校验一次，否则会静默改来源并删掉别人的包。
     if (entry.source.kind === 'market') {
@@ -1206,6 +1250,17 @@ export class ExtensionPluginService {
   }
   logs(id: string, maxBytes = DEFAULT_LOG_TAIL_BYTES): Promise<string> {
     return this.logger.read(id, maxBytes);
+  }
+  /** Main-only code source for authoring; no private data/config path crosses IPC. */
+  installedPackage(id: string): { path: string; version: string; build: string } | null {
+    const record = this.records.find((item) => item.id === id);
+    const manifest = record ? this.load(id, record.dir) : null;
+    if (!record || !manifest) return null;
+    return {
+      path: pluginPackagePath(this.options.root, id, record.dir),
+      version: record.version,
+      build: this.fingerprint(record.dir, manifest),
+    };
   }
   viewStateGet(pluginId: string): Record<string, string> {
     return this.viewState.get(pluginId);

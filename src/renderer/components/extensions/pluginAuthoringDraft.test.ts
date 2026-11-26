@@ -43,3 +43,26 @@ it('includes the bound relative directory, kept plugin ID, and the user’s requ
   for (const text of [draft.id, draft.directory, 'A local note panel', 'Do not install'])
     expect(prompt).toContain(text);
 });
+
+it('binds instructions to the actual host, native theme/placement and evidence instead of claiming completion', () => {
+  const prompt = buildPluginAuthoringPrompt(
+    {
+      id: 'local.draft123',
+      directory: 'plugin-123',
+      hostVersion: '0.2.110',
+      template: 'workspace',
+    },
+    '做一个记忆插件',
+    'zh'
+  );
+  for (const expected of [
+    '0.2.110',
+    'HOST-CAPABILITIES.md',
+    'activitybar',
+    'dataDir',
+    '宿主源码',
+    '尚未验证',
+    'sourceHash',
+  ])
+    expect(prompt).toContain(expected);
+});

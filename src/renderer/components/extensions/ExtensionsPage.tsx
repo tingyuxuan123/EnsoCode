@@ -207,6 +207,7 @@ export function ExtensionsPage({
   );
   const [urlOpen, setUrlOpen] = useState(false);
   const [authorGuideOpen, setAuthorGuideOpen] = useState(false);
+  const [authoringInstalledId, setAuthoringInstalledId] = useState<string>();
   const [url, setUrl] = useState('');
   const [scope, setScope] = useState<'public' | 'mine'>('public');
   const [showcase, setShowcase] = useState<{
@@ -451,7 +452,12 @@ export function ExtensionsPage({
           <Link2 />
           {t('Install plugin from link')}
         </MenuItem>
-        <MenuItem onClick={() => setAuthorGuideOpen(true)}>
+        <MenuItem
+          onClick={() => {
+            setAuthoringInstalledId(undefined);
+            setAuthorGuideOpen(true);
+          }}
+        >
           <FileCode2 />
           {t('Build your own plugin')}
         </MenuItem>
@@ -979,6 +985,16 @@ export function ExtensionsPage({
                   </div>
                   <p className="break-all font-mono text-muted-foreground text-xs">{plugin.id}</p>
                   <PluginManagementDetails plugin={plugin} manager={native} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAuthoringInstalledId(plugin.id);
+                      setAuthorGuideOpen(true);
+                    }}
+                  >
+                    {t('Continue editing installed plugin')}
+                  </Button>
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm">{t('Permissions')}</h3>
                     <p className="break-words text-muted-foreground text-xs">
@@ -1154,6 +1170,7 @@ export function ExtensionsPage({
       </Dialog>
       {authorGuideOpen && (
         <PluginAuthoringDialog
+          installedId={authoringInstalledId}
           onClose={() => setAuthorGuideOpen(false)}
           onOpenConversation={() => {
             setAuthorGuideOpen(false);

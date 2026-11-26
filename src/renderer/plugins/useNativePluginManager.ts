@@ -233,6 +233,14 @@ export function useNativePluginManager() {
         if (!file) throw new Error('Drop a plugin folder or ZIP file.');
       }
     );
+  const stageAuthoringTrial = (sessionId: string, pluginId: string) =>
+    stageSource('stage:authoring-trial', (session) =>
+      session.api.stageAuthoringTrial(sessionId, pluginId)
+    );
+  const rollbackAuthoringDraft = (sessionId: string, pluginId: string) =>
+    stageSource('stage:authoring-rollback', (session) =>
+      session.api.rollbackAuthoringDraft(sessionId, pluginId)
+    );
 
   const cancelPreview = () =>
     run(
@@ -350,6 +358,8 @@ export function useNativePluginManager() {
     });
 
   return {
+    stageAuthoringTrial,
+    rollbackAuthoringDraft,
     available: !!api,
     canManage: !!api && !loading && !registryError && !loadError,
     plugins,

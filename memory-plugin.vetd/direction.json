@@ -1,0 +1,165 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "CodeKiln's local memory plugin: project-scoped long-term memories, daily logs, todos and recoverable deletion — with a live view of the context pack injected into the next turn.",
+		"screens": [
+			"长期记忆 list with the context-pack rail",
+			"关键词搜索 results",
+			"每日日志",
+			"待办",
+			"最近删除",
+			"设置（学习、预算、模型、数据安全）",
+			"新增记忆 dialog",
+			"记忆已暂停 state",
+			"activity bar icon set"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "desktop"
+	},
+	"seed": 1230845932,
+	"at": "2026-11-26T01:03:51.962Z",
+	"options": [
+		"pack-ledger",
+		"logbook",
+		"counts-rail"
+	],
+	"choice": {
+		"proposalId": "pack-ledger"
+	},
+	"allow": [
+		"tell-mono"
+	],
+	"intent": {
+		"stated": {
+			"mood": "must feel native to the CodeKiln app shell: flat surfaces, 1px hairlines, the app's own blue only on data, line icons at the same weight as the rail",
+			"brand": "CodeKiln",
+			"boldness": "restrained",
+			"preferences": [
+				{
+					"question": "风格方向",
+					"answer": "与 CodeKiln 主壳一致；侧栏图标统一成线条图标；本轮上下文账本是重点"
+				},
+				{
+					"question": "配色",
+					"answer": "沿用宿主主题令牌，强调色跟随应用 brand"
+				}
+			]
+		},
+		"questions": [],
+		"answers": null
+	},
+	"obvious": "Inter 14px on #f5f8fa, 1120px centred column, five underline tabs, every memory a white 6px card with 1px border, a blue #408abf filled 记一条 button, a stats card with three numbers, settings as nine stacked card rows, the editor as a centred modal.",
+	"proposals": [
+		{
+			"id": "pack-ledger",
+			"name": "上下文账本",
+			"idea": "本轮真正注入下一轮对话的上下文档，成为页面上的账本：右侧一栏按 待办 / 今日日志 / 长期记忆 / 昨日日志 列出这一包吃掉了 12,000 字预算的哪一段。",
+			"departs": "第二个栏不再放三个统计数字，而是回答插件存在的理由：哪些条目真的进了下一轮，还有多少预算没用。列表行从卡片换成带细线的账本行。",
+			"theme": "dark",
+			"colours": {
+				"ground": "#141416",
+				"panel": "#1c1c1f",
+				"text": "#e6e6e7",
+				"muted": "#9a9a9e",
+				"accent": "#e6b254",
+				"onAccent": "#1a1206",
+				"extra": {
+					"brand": "#e6b254",
+					"danger": "#ea8a7d",
+					"success": "#6fbf8f",
+					"line": "#2e2e33"
+				}
+			},
+			"type": {
+				"display": "Hanken Grotesk",
+				"text": "Inter",
+				"class": "grotesk-light"
+			},
+			"layout": "顶部一行是项目范围、搜索和记一条；下面是横向下划线页签；主栏 720px 带线列表，右栏 300px 是本轮上下文账本，含预算堆叠条、分块字数与被截断提示；设置页换成两列表单，收起账本栏。",
+			"radius": 6,
+			"shell": null,
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "字符预算、条数和记忆 id 是这个产品的计量单位，等宽数字让账本各列对得上。"
+				}
+			]
+		},
+		{
+			"id": "logbook",
+			"name": "一页账本",
+			"idea": "四个库（记忆、日志、待办、回收站）变成一页连续的项目流水账，按 类型 / 内容 / 范围 / 时间 四列排开。",
+			"departs": "没有卡片也没有右栏：一栏 860px 站在页面底色上，一行一条细线，类型与范围是定宽列不是胶囊，上下文预算收成页签下一行安静的戳记。",
+			"theme": "light",
+			"colours": {
+				"ground": "#f5f8fa",
+				"panel": "#ffffff",
+				"text": "#1b2632",
+				"muted": "#4d5c6a",
+				"accent": "#337099",
+				"onAccent": "#ffffff",
+				"extra": {
+					"brand": "#337099",
+					"danger": "#9c3f47",
+					"success": "#2f6b4f",
+					"line": "#cddbe4"
+				}
+			},
+			"type": {
+				"display": "Inter Tight",
+				"text": "Inter",
+				"class": "grotesk-tight"
+			},
+			"layout": "48px 顶栏放范围与搜索，页签用整行细线收口，下面是带粘性列头的流水账，底部翻页，记一条钉在顶栏；设置是 720px 单列表单，分节用细线。",
+			"radius": 4,
+			"shell": null,
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "时间戳与字数按列对齐，流水账的竖线才立得住。"
+				}
+			]
+		},
+		{
+			"id": "counts-rail",
+			"name": "计数导航",
+			"idea": "四个库本身变成导航：左侧分区轨每一项带着实时条数（长期记忆 24、每日日志 9、待办 7、最近删除 2），不打开页签也知道队列多长。",
+			"departs": "页签从顶部搬进 200px 左轨并带条数，底部放本轮预算；列表拿到剩余全部宽度，右侧留动作列；设置页保留左轨，改预算时计数就在旁边。",
+			"theme": "dark",
+			"colours": {
+				"ground": "#12191a",
+				"panel": "#1a2425",
+				"text": "#e4ecec",
+				"muted": "#8fa0a0",
+				"accent": "#5ecfca",
+				"onAccent": "#062422",
+				"extra": {
+					"brand": "#5ecfca",
+					"danger": "#ea8a7d",
+					"success": "#6fbf8f",
+					"line": "#28393a"
+				}
+			},
+			"type": {
+				"display": "JetBrains Mono",
+				"text": "Inter",
+				"class": "mono"
+			},
+			"layout": "左侧 200px 轨：记忆、日志、待办、回收站带条数，底部设置与小号预算表；右侧顶栏放范围、搜索、记一条，下面列表每行右对齐动作；设置在同一框架内变成表单，字符预算旁就是实时预算表。",
+			"radius": 6,
+			"shell": null,
+			"breaks": "",
+			"devices": [
+				{
+					"device": "shadow",
+					"reason": "新增记忆对话框与下拉是浮层，用一层浅投影区别于平铺的工作面。"
+				}
+			]
+		}
+	],
+	"redraws": []
+}

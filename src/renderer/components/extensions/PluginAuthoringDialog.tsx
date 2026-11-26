@@ -1,3 +1,12 @@
+import {
+  AUTHORING_TEMPLATES,
+  type AuthoringTemplate,
+  recommendAuthoringTemplate,
+} from '@shared/extensionPlugins/authoringContract';
+import type {
+  PluginAuthoringContextResult,
+  PluginAuthoringDraft,
+} from '@shared/extensionPlugins/types';
 import { ArrowRight, FileCode2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { requestFocusComposer } from '@/components/chat/composerMentionBridge';
@@ -52,9 +61,11 @@ function authoringTarget(sessionId: string | null) {
 export function PluginAuthoringDialog({
   onClose,
   onOpenConversation,
+  installedId,
 }: {
   onClose: () => void;
   onOpenConversation: () => void;
+  installedId?: string;
 }) {
   const { t, locale } = useI18n();
   const sessionId = useSessionsStore((state) => state.activeId);
@@ -62,8 +73,14 @@ export function PluginAuthoringDialog({
   const origin = useRef(sessionId);
   const target = authoringTarget(sessionId);
   const api = window.electronAPI?.extensionPlugins;
-  const supported = typeof api?.createAuthoringDraft === 'function';
+  const supported =
+    typeof api?.createAuthoringDraft === 'function' &&
+    typeof api.authoringContext === 'function' &&
+    typeof api.inspectAuthoringDraft === 'function';
   const [request, setRequest] = useState('');
+  const [template, setTemplate] = useState<AuthoringTemplate | 'auto'>('auto');
+  const [context, setContext] = useState<PluginAuthoringContextResult>();
+  const chosen = template === 'auto' ? recommendAuthoringTemplate(request) : template;
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const mounted = useRef(false);
@@ -74,6 +91,62 @@ export function PluginAuthoringDialog({
       mounted.current = false;
     };
   }, []);
+  useEffect(() => {
+    let disposed = false;
+    if (sessionId && api?.authoringContext)
+      void api
+        .authoringContext(sessionId)
+        .then((result) => {
+          if (!disposed) setContext(result);
+        })
+        .catch((reason) => {
+          if (!disposed) setError(String(reason));
+        });
+    return () => {
+      disposed = true;
+    };
+  }, [sessionId, api]);
+  const showDraft = (draft: PluginAuthoringDraft, description: string) => {
+    const id = origin.current,
+      current = authoringTarget(id);
+    if (!id || !current || !mounted.current) return;
+    const revision = readEmptyAuthoringDraft(id),
+      text = buildPluginAuthoringPrompt(draft, description, locale),
+      filled = fillPluginAuthoringDraft(id, revision, text);
+    useSidePanelStore.getState().setFullscreen(false);
+    addSidePanelPluginAuthoring({
+      sessionId: id,
+      projectId: current.projectId,
+      cwd: current.cwd,
+      ...draft,
+      prompt: text,
+      filled,
+      title: t('Plugin authoring'),
+    });
+    onOpenConversation();
+    if (filled)
+      requestAnimationFrame(() => {
+        if (authoringTarget(id)) requestFocusComposer();
+      });
+  };
+  const reopen = async (pluginId: string, installed = false) => {
+    const id = origin.current;
+    if (!id || !authoringTarget(id) || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api.openAuthoringDraft(id, pluginId, installed);
+      if (!mounted.current || !authoringTarget(id)) return;
+      if (!result.ok) throw Error(result.error);
+      showDraft(result.draft, result.draft.request ?? t('Continue editing this plugin'));
+    } catch (reason) {
+      if (mounted.current) setError(String(reason));
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  };
 
   const start = async () => {
     const id = origin.current;
@@ -93,7 +166,7 @@ export function PluginAuthoringDialog({
     setBusy(true);
     setError('');
     try {
-      const result = await api.createAuthoringDraft(id);
+      const result = await api.createAuthoringDraft(id, { template: chosen, request: description });
       const latest = authoringTarget(id);
       if (
         !mounted.current ||
@@ -154,6 +227,49 @@ export function PluginAuthoringDialog({
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="space-y-4">
+            {context?.ok && (
+              <p className="text-muted-foreground text-xs">
+                {t('Authoring host')}: {context.capabilities.hostVersion} ·{' '}
+                {t('Native theme and isolated trial data')}
+              </p>
+            )}
+            {context && !context.ok && (
+              <p role="alert" className="text-destructive text-xs">
+                {context.error}
+              </p>
+            )}
+            {installedId && target && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void reopen(installedId, true)}
+              >
+                {t('Continue editing installed plugin')}
+              </Button>
+            )}
+            {context?.ok && context.drafts.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-sm">
+                  {t('Resume a plugin project')} ({context.drafts.length})
+                </summary>
+                <div className="mt-2 space-y-1">
+                  {context.drafts.map((draft) => (
+                    <Button
+                      type="button"
+                      key={draft.id}
+                      variant="ghost"
+                      className="h-auto w-full justify-start whitespace-normal text-left"
+                      disabled={busy}
+                      onClick={() => void reopen(draft.id)}
+                    >
+                      {draft.request?.slice(0, 70) || draft.id}
+                      <span className="ml-2 text-muted-foreground text-xs">{draft.directory}</span>
+                    </Button>
+                  ))}
+                </div>
+              </details>
+            )}
             {target && (
               <div className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm">
                 <FileCode2 className="size-4 shrink-0" />
@@ -171,16 +287,64 @@ export function PluginAuthoringDialog({
                 )}
               </p>
             ) : (
-              <label className="block space-y-2 text-sm">
-                <span>{t('What should your plugin do?')}</span>
-                <Textarea
-                  maxLength={REQUEST_MAX}
-                  disabled={busy}
-                  value={request}
-                  onChange={(event) => setRequest(event.target.value)}
-                  placeholder={t('For example, add a sidebar for project notes.')}
-                />
-              </label>
+              <div className="space-y-3">
+                <label className="block space-y-2 text-sm">
+                  <span>{t('What should your plugin do?')}</span>
+                  <Textarea
+                    maxLength={REQUEST_MAX}
+                    disabled={busy}
+                    value={request}
+                    onChange={(event) => setRequest(event.target.value)}
+                    placeholder={t('For example, add a sidebar for project notes.')}
+                  />
+                </label>
+                <label className="block space-y-1 text-sm">
+                  <span>{t('Plugin entry')}</span>
+                  <select
+                    aria-label={t('Plugin entry')}
+                    className="w-full rounded border border-border bg-background p-2"
+                    value={template}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (
+                        value === 'auto' ||
+                        value === 'workspace' ||
+                        value === 'sidebar' ||
+                        value === 'command' ||
+                        value === 'tool'
+                      )
+                        setTemplate(value);
+                    }}
+                  >
+                    <option value="auto">{t('Recommend from the request')}</option>
+                    {AUTHORING_TEMPLATES.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {t(
+                          {
+                            workspace: 'Left workspace',
+                            sidebar: 'Right helper panel',
+                            command: 'Command only',
+                            tool: 'Model tool only',
+                          }[item.id]
+                        )}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-muted-foreground text-xs">
+                    {t('Recommended entry')}:{' '}
+                    {t(
+                      {
+                        workspace: 'Left workspace',
+                        sidebar: 'Right helper panel',
+                        command: 'Command only',
+                        tool: 'Model tool only',
+                      }[chosen]
+                    )}{' '}
+                    · {t('Uses native colors and typography by default.')}
+                  </p>
+                </label>
+              </div>
             )}
             {error && (
               <p role="alert" className="break-words text-destructive text-sm">

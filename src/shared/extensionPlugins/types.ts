@@ -232,7 +232,45 @@ export interface PluginAuthoringDraft {
   id: string;
   /** Directory relative to the session's Main-authorized workspace. */
   directory: string;
+  template?: import('./authoringContract').AuthoringTemplate;
+  request?: string;
+  hostVersion?: string;
+  trialId?: string;
+  baseVersion?: string;
 }
+
+export interface PluginAuthoringOptions {
+  template: import('./authoringContract').AuthoringTemplate;
+  request: string;
+}
+export interface PluginAuthoringCheck {
+  state: 'passed' | 'failed' | 'unverified' | 'stale';
+  detail: string;
+  at?: number;
+  /** Human evidence is never presented as an automated test. */
+  reportedBy?: 'user';
+}
+export interface PluginAuthoringInspection {
+  ok: true;
+  draft: PluginAuthoringDraft;
+  sourceHash: string;
+  name: string;
+  version: string;
+  capabilities: ReturnType<typeof import('./authoringContract').authoringCapabilities>;
+  checks: Record<'static' | 'tests' | 'runtime' | 'business' | 'models', PluginAuthoringCheck>;
+  warnings: string[];
+  installed?: { version: string; build: string; state: string };
+  trial?: { id: string; version: string; state: string; current: boolean; error?: string };
+  rollbackAvailable: boolean;
+}
+export type PluginAuthoringInspectResult = PluginAuthoringInspection | { ok: false; error: string };
+export type PluginAuthoringContextResult =
+  | {
+      ok: true;
+      capabilities: ReturnType<typeof import('./authoringContract').authoringCapabilities>;
+      drafts: PluginAuthoringDraft[];
+    }
+  | { ok: false; error: string };
 
 export type PluginAuthoringCreateResult =
   | { ok: true; draft: PluginAuthoringDraft }

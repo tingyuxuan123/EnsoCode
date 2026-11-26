@@ -86,6 +86,7 @@ export function activate(enso) {
       ...(await service.status(args, ctx)),
       model: (await enso.config.get()).model ?? 'session',
     }),
+    context: (args, ctx) => service.context(args, ctx),
     read: (args, ctx) => service.read({ ...args, limit: Math.min(args.limit ?? 6, 6) }, ctx),
     search: (args, ctx) => service.find({ ...args, limit: Math.min(args.limit ?? 6, 6) }, ctx),
     trash: service.trash,
@@ -100,6 +101,11 @@ export function activate(enso) {
     },
     copy_markdown: async (_args, ctx) => {
       const text = await service.markdown(ctx);
+      await enso.ui.clipboard.writeText(text);
+      return { copied: true, characters: text.length };
+    },
+    copy_context: async (_args, ctx) => {
+      const { text } = await service.context({}, ctx);
       await enso.ui.clipboard.writeText(text);
       return { copied: true, characters: text.length };
     },

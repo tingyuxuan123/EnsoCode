@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import type {
   ExtensionPluginInstallPreview,
   ExtensionPluginReadmeResult,
+  PluginAuthoringOptions,
 } from '@shared/extensionPlugins/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, dialog, ipcMain, webContents } from 'electron';
@@ -56,6 +57,25 @@ const id = (v: unknown): v is string =>
 const token = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 128;
 const authoringSessionId = (v: unknown): v is string =>
   typeof v === 'string' && /^[A-Za-z0-9-]{1,128}$/.test(v);
+function authoringOptions(raw: unknown): PluginAuthoringOptions | null {
+  if (
+    !record(raw) ||
+    Object.keys(raw).some((key) => !['template', 'request'].includes(key)) ||
+    typeof raw.request !== 'string' ||
+    raw.request.length > 4000 ||
+    !raw.request.trim()
+  )
+    return null;
+  const template = raw.template;
+  if (
+    template !== 'workspace' &&
+    template !== 'sidebar' &&
+    template !== 'command' &&
+    template !== 'tool'
+  )
+    return null;
+  return { template, request: raw.request.trim() };
+}
 const methods = ['command.run', 'trigger.candidates', 'trigger.pick', 'renderer.call'] as const;
 const CONFIG_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 const safeKey = (key: string) => !['__proto__', 'constructor', 'prototype'].includes(key);
@@ -116,7 +136,23 @@ type Handler = (event: PluginSenderEvent, ...args: unknown[]) => unknown;
 interface HandlerDeps {
   trusted(event: PluginSenderEvent): boolean;
   authoringTrusted?(event: PluginSenderEvent): boolean;
-  authoring?: Pick<PluginAuthoring, 'create' | 'validate' | 'stage'>;
+  authoring?: Pick<PluginAuthoring, 'create' | 'validate' | 'stage'> &
+    Partial<
+      Pick<
+        PluginAuthoring,
+        | 'context'
+        | 'open'
+        | 'inspect'
+        | 'test'
+        | 'export'
+        | 'stageTrial'
+        | 'trialLoaded'
+        | 'finishTrial'
+        | 'editInstalled'
+        | 'evidence'
+        | 'rollback'
+      >
+    >;
   /**
    * 只读插件摘要/素材的额外发送方：协作看板、独立设计窗口等跟随应用外观的应用窗口
    * 也要读插件调色板（`list` + `asset`）。管理、安装、调用类通道一律不走这条路径。
@@ -266,11 +302,141 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
       const path = await deps.pickPath(e, kind);
       return deps.trusted(e) ? { ok: true, path } : deny;
     }),
-    createAuthoringDraft: forAuthoring((e, sessionId, ...extra) =>
-      deps.authoring && authoringSessionId(sessionId) && !extra.length
-        ? deps.authoring.create(e.sender.id, sessionId, deps.signal?.(e))
+    createAuthoringDraft: forAuthoring((e, sessionId, options, ...extra) => {
+      const parsed = options === undefined ? undefined : authoringOptions(options);
+      if (!deps.authoring || !authoringSessionId(sessionId) || extra.length || parsed === null)
+        return invalid;
+      return parsed
+        ? deps.authoring.create(e.sender.id, sessionId, deps.signal?.(e), parsed)
+        : deps.authoring.create(e.sender.id, sessionId, deps.signal?.(e));
+    }),
+    authoringContext: forAuthoring((e, sessionId, ...extra) =>
+      deps.authoring?.context && authoringSessionId(sessionId) && !extra.length
+        ? deps.authoring.context(e.sender.id, sessionId)
         : invalid
     ),
+    openAuthoringDraft: forAuthoring((e, sessionId, pluginId, installed, ...extra) => {
+      if (
+        !deps.authoring?.open ||
+        !deps.authoring.editInstalled ||
+        !authoringSessionId(sessionId) ||
+        !id(pluginId) ||
+        extra.length ||
+        (installed !== undefined && typeof installed !== 'boolean')
+      )
+        return invalid;
+      return installed
+        ? deps.authoring.editInstalled(e.sender.id, sessionId, pluginId, deps.service())
+        : deps.authoring.open(e.sender.id, sessionId, pluginId);
+    }),
+    inspectAuthoringDraft: forAuthoring((e, sessionId, pluginId, ...extra) =>
+      deps.authoring?.inspect && authoringSessionId(sessionId) && id(pluginId) && !extra.length
+        ? deps.authoring.inspect(e.sender.id, sessionId, pluginId, deps.service(), deps.signal?.(e))
+        : invalid
+    ),
+    testAuthoringDraft: forAuthoring((e, sessionId, pluginId, confirmed, ...extra) =>
+      deps.authoring?.test &&
+      authoringSessionId(sessionId) &&
+      id(pluginId) &&
+      confirmed === true &&
+      !extra.length
+        ? deps.authoring.test(e.sender.id, sessionId, pluginId, true, deps.signal?.(e))
+        : invalid
+    ),
+    stageAuthoringTrial: forAuthoring((e, sessionId, pluginId, ...extra) =>
+      deps.authoring?.stageTrial && authoringSessionId(sessionId) && id(pluginId) && !extra.length
+        ? deps.authoring.stageTrial(
+            e.sender.id,
+            sessionId,
+            pluginId,
+            deps.service(),
+            deps.signal?.(e)
+          )
+        : invalid
+    ),
+    loadAuthoringTrial: forAuthoring((e, sessionId, pluginId, ...extra) =>
+      deps.authoring?.trialLoaded && authoringSessionId(sessionId) && id(pluginId) && !extra.length
+        ? deps.authoring.trialLoaded(e.sender.id, sessionId, pluginId, deps.service())
+        : invalid
+    ),
+    finishAuthoringTrial: forAuthoring((e, sessionId, pluginId, confirmed, ...extra) =>
+      deps.authoring?.finishTrial &&
+      authoringSessionId(sessionId) &&
+      id(pluginId) &&
+      confirmed === true &&
+      !extra.length
+        ? deps.authoring.finishTrial(e.sender.id, sessionId, pluginId, deps.service())
+        : invalid
+    ),
+    rollbackAuthoringDraft: forAuthoring((e, sessionId, pluginId, ...extra) =>
+      deps.authoring?.rollback && authoringSessionId(sessionId) && id(pluginId) && !extra.length
+        ? deps.authoring.rollback(e.sender.id, sessionId, pluginId, deps.service())
+        : invalid
+    ),
+    authoringEvidence: forAuthoring((e, sessionId, pluginId, input, ...extra) => {
+      if (
+        !deps.authoring?.evidence ||
+        !authoringSessionId(sessionId) ||
+        !id(pluginId) ||
+        extra.length ||
+        !record(input) ||
+        Object.keys(input).some(
+          (key) => !['layer', 'sourceHash', 'note', 'models'].includes(key)
+        ) ||
+        (input.layer !== 'business' && input.layer !== 'models') ||
+        typeof input.sourceHash !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(input.sourceHash) ||
+        typeof input.note !== 'string' ||
+        input.note.length > 2000
+      )
+        return invalid;
+      if (
+        input.models !== undefined &&
+        (!Array.isArray(input.models) ||
+          input.models.length > 8 ||
+          input.models.some((model) => typeof model !== 'string' || model.length > 200))
+      )
+        return invalid;
+      const models = Array.isArray(input.models)
+        ? input.models.filter((model): model is string => typeof model === 'string')
+        : undefined;
+      return deps.authoring.evidence(e.sender.id, sessionId, pluginId, {
+        layer: input.layer,
+        sourceHash: input.sourceHash,
+        note: input.note,
+        ...(models ? { models } : {}),
+      });
+    }),
+    exportAuthoringDraft: forAuthoring(async (e, sessionId, pluginId, ...extra) => {
+      if (
+        !deps.authoring?.export ||
+        !deps.save ||
+        !authoringSessionId(sessionId) ||
+        !id(pluginId) ||
+        extra.length
+      )
+        return invalid;
+      const packed = await deps.authoring.export(
+        e.sender.id,
+        sessionId,
+        pluginId,
+        deps.signal?.(e)
+      );
+      try {
+        const destination = await deps.save(e, packed.name);
+        if (!destination) return { ok: true, cancelled: true };
+        if (!deps.authoringTrusted?.(e)) return deny;
+        await copyFile(packed.file, destination);
+        return {
+          ok: true,
+          name: packed.name,
+          sha256: packed.sha256,
+          size: packed.size,
+        };
+      } finally {
+        await packed.cleanup();
+      }
+    }),
     validateAuthoringDraft: forAuthoring((e, sessionId, pluginId, ...extra) =>
       deps.authoring && authoringSessionId(sessionId) && id(pluginId) && !extra.length
         ? deps.authoring.validate(e.sender.id, sessionId, pluginId, deps.signal?.(e))
@@ -457,6 +623,7 @@ export function registerExtensionPluginHandlers(): void {
         const authoring = new PluginAuthoring({
           workspace: pluginAuthoringWorkspace,
           hostVersion: app.getVersion(),
+          stateRoot: join(app.getPath('userData'), 'plugin-authoring'),
         });
         setPluginAssetResolver((id, rel) => getExtensionPlugins().assetMediaPath(id, rel));
         getExtensionPlugins().onChange(() =>
@@ -537,6 +704,16 @@ export function registerExtensionPluginHandlers(): void {
     [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CREATE, 'createAuthoringDraft'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_VALIDATE, 'validateAuthoringDraft'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_STAGE, 'stageAuthoringDraft'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CONTEXT, 'authoringContext'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_OPEN, 'openAuthoringDraft'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_INSPECT, 'inspectAuthoringDraft'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TEST, 'testAuthoringDraft'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TRIAL, 'stageAuthoringTrial'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TRIAL_LOADED, 'loadAuthoringTrial'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TRIAL_FINISH, 'finishAuthoringTrial'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_EXPORT, 'exportAuthoringDraft'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_EVIDENCE, 'authoringEvidence'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_ROLLBACK, 'rollbackAuthoringDraft'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_PICK_AND_STAGE, 'pickAndStage'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_PATH, 'stagePath'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_STAGE_URL, 'stageUrl'],
@@ -563,7 +740,19 @@ export function registerExtensionPluginHandlers(): void {
       const authoring =
         key === 'createAuthoringDraft' ||
         key === 'validateAuthoringDraft' ||
-        key === 'stageAuthoringDraft';
+        key === 'stageAuthoringDraft' ||
+        [
+          'authoringContext',
+          'openAuthoringDraft',
+          'inspectAuthoringDraft',
+          'testAuthoringDraft',
+          'stageAuthoringTrial',
+          'loadAuthoringTrial',
+          'finishAuthoringTrial',
+          'exportAuthoringDraft',
+          'authoringEvidence',
+          'rollbackAuthoringDraft',
+        ].includes(key);
       const allowed = authoring
         ? trusted(event) && isMainAuthoringWindow(event)
         : trusted(event) || (readOnlyChannels.has(channel) && readTrusted(event));

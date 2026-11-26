@@ -1552,8 +1552,94 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.EXTENSION_PLUGINS_CHANGED, listener);
     },
-    createAuthoringDraft: (sessionId: string): Promise<PluginAuthoringCreateResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CREATE, sessionId),
+    createAuthoringDraft: (
+      sessionId: string,
+      options?: PluginAuthoringOptions
+    ): Promise<PluginAuthoringCreateResult> =>
+      options
+        ? ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CREATE, sessionId, options)
+        : ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CREATE, sessionId),
+    authoringContext: (sessionId: string): Promise<PluginAuthoringContextResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_CONTEXT, sessionId),
+    openAuthoringDraft: (
+      sessionId: string,
+      pluginId: string,
+      installed = false
+    ): Promise<PluginAuthoringCreateResult> =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_OPEN,
+        sessionId,
+        pluginId,
+        installed
+      ),
+    inspectAuthoringDraft: (
+      sessionId: string,
+      pluginId: string
+    ): Promise<PluginAuthoringInspectResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_INSPECT, sessionId, pluginId),
+    testAuthoringDraft: (
+      sessionId: string,
+      pluginId: string,
+      confirmed: true
+    ): Promise<{ ok: boolean; passed?: boolean; output?: string; error?: string }> =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TEST,
+        sessionId,
+        pluginId,
+        confirmed
+      ),
+    stageAuthoringTrial: (sessionId: string, pluginId: string): Promise<PluginStageResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TRIAL, sessionId, pluginId),
+    loadAuthoringTrial: (
+      sessionId: string,
+      pluginId: string
+    ): Promise<{
+      ok: boolean;
+      id?: string;
+      views?: { id: string; title: string; location?: 'sidebar' | 'activitybar' }[];
+      commands?: { id: string; title: string }[];
+      error?: string;
+    }> =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TRIAL_LOADED,
+        sessionId,
+        pluginId
+      ),
+    finishAuthoringTrial: (
+      sessionId: string,
+      pluginId: string,
+      confirmed: true
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_TRIAL_FINISH,
+        sessionId,
+        pluginId,
+        confirmed
+      ),
+    exportAuthoringDraft: (
+      sessionId: string,
+      pluginId: string
+    ): Promise<{
+      ok: boolean;
+      cancelled?: boolean;
+      name?: string;
+      sha256?: string;
+      size?: number;
+      error?: string;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_EXPORT, sessionId, pluginId),
+    authoringEvidence: (
+      sessionId: string,
+      pluginId: string,
+      input: { layer: 'business' | 'models'; sourceHash: string; note: string; models?: string[] }
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_EVIDENCE,
+        sessionId,
+        pluginId,
+        input
+      ),
+    rollbackAuthoringDraft: (sessionId: string, pluginId: string): Promise<PluginStageResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_AUTHORING_ROLLBACK, sessionId, pluginId),
     validateAuthoringDraft: (
       sessionId: string,
       pluginId: string
@@ -1744,7 +1830,10 @@ import type {
   ExtensionPluginMarketList,
   ExtensionPluginNotice,
   ExtensionPluginReadmeResult,
+  PluginAuthoringContextResult,
   PluginAuthoringCreateResult,
+  PluginAuthoringInspectResult,
+  PluginAuthoringOptions,
   PluginAuthoringValidationResult,
   RegistryNotice,
 } from '@shared/extensionPlugins/types';

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   boolean,
   content,
+  contextSections,
   DAILY_KINDS,
   enumValue,
   integer,
@@ -9,6 +10,7 @@ import {
   KINDS,
   LIMITS,
   localDate,
+  looksSensitive,
   newest,
   parseSettings,
   search,
@@ -332,6 +334,13 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
           restoredAt: entry.restoredAt,
           count: entry.records.length,
           preview: (entry.records[0].record.content ?? entry.records[0].record.text).slice(0, 180),
+          previews: entry.records
+            .slice(0, 3)
+            .map((item) => (item.record.content ?? item.record.text).slice(0, 120)),
+          sources: entry.records.reduce((counts, item) => {
+            counts[item.type] = (counts[item.type] ?? 0) + 1;
+            return counts;
+          }, {}),
         }));
       return page(rows, args);
     },
@@ -372,6 +381,28 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
         ).length,
         limits: LIMITS,
         search: 'BM25 keyword (Latin / CJK / #tag / [[link]]); no embeddings',
+      };
+    },
+    /** What the next turn will actually start with, and what each block costs. */
+    async context(_args = {}, ctx = {}) {
+      const state = await readState();
+      const report = contextSections(state, projectOf(ctx), '', now());
+      const candidates = state.memories
+        .filter((row) => allowed(row, ctx) && !looksSensitive(row.content))
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned) || newest(a, b));
+      return {
+        enabled: report.enabled,
+        budget: report.budget,
+        header: report.header,
+        total: report.total,
+        text: report.text,
+        sections: report.sections,
+        memoryLimit: state.settings.maxMemories,
+        memoryVisible: candidates.length,
+        skipped: candidates
+          .slice(state.settings.maxMemories, state.settings.maxMemories + 3)
+          .map((row) => row.content.slice(0, 80)),
+        mode: state.settings.mode,
       };
     },
     async checkpoint(kind, text, key, ctx) {

@@ -6,7 +6,7 @@ import test from 'node:test';
 import { Window } from 'happy-dom';
 import { activate } from '../main.mjs';
 
-async function mount(t, { hidden = false } = {}) {
+async function mount(t, { hidden = false, width = 360 } = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'memory-ui-'));
   const window = new Window({ settings: { enableJavaScriptEvaluation: true } });
   t.after(async () => {
@@ -41,9 +41,10 @@ async function mount(t, { hidden = false } = {}) {
   };
   const html = await readFile(new URL('../memory.html', import.meta.url), 'utf8');
   window.document.write(html.replace(/<script>[\s\S]*?<\/script>/, ''));
-  window.document.body.getBoundingClientRect = () => ({ width: hidden ? 0 : 360 });
+  window.document.body.getBoundingClientRect = () => ({ width: hidden ? 0 : width });
   window.eval(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+  // 渲染是异步的（status → read → context），固定 40ms 在负载高时会假失败。
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
   await settle();
   return {
     window,
@@ -134,6 +135,32 @@ test('restoring many hidden sidebar instances does not call the host until one b
   assert.equal(f.calls.filter((row) => row.name === 'status').length, 1);
 });
 
+test('the context ledger shows what the next turn will carry, and the cap that limits it', async (t) => {
+  const f = await mount(t, { width: 1400 });
+  assert.equal(f.$('pack').hidden, false);
+  await f.methods.get('save')({ content: '账本里的第一条记忆', pinned: true }, f.ctx);
+  f.$('refresh').click();
+  await f.settle();
+
+  const report = await f.methods.get('context')({}, f.ctx);
+  assert.equal(f.$('pack-total').textContent, report.total.toLocaleString('en-US'));
+  assert.equal(f.$('pack-budget').textContent, `/ ${report.budget.toLocaleString('en-US')} 字`);
+  const rows = [...f.window.document.querySelectorAll('#pack-legend .pack__row')];
+  assert.deepEqual(
+    rows.map((row) => row.dataset.key),
+    ['todos', 'today', 'memory', 'related', 'yesterday']
+  );
+  assert.equal(rows[3].dataset.empty, 'true', 'related memories are off in stable mode');
+  assert.equal(f.$('pack-picked').textContent, '1');
+  assert.match(f.$('pack-skip-label').textContent, /全部收下了/);
+  assert.ok(f.$('budget-value').textContent.includes(`${report.total.toLocaleString('en-US')}`));
+});
+
+test('a narrow workspace drops the ledger instead of squeezing the list', async (t) => {
+  const f = await mount(t, { width: 900 });
+  assert.equal(f.$('pack').hidden, true);
+});
+
 test('memory UI uses host colors, emphasis and typography even when the light/dark mode is unchanged', async (t) => {
   const f = await mount(t);
   const root = f.window.document.documentElement;
@@ -155,4 +182,40 @@ test('memory UI uses host colors, emphasis and typography even when the light/da
     f.window.getComputedStyle(f.window.document.body).backgroundColor,
     'rgb(12, 34, 56)'
   );
+});
+
+test('adding a todo and a memory from the dialog actually persists and shows up', async (t) => {
+  const f = await mount(t);
+  f.clickTab('todos');
+  await f.settle();
+  f.$('add').click();
+  f.$('edit-content').value = '从对话框添加的待办';
+  f.$('editor-form').dispatchEvent(new f.window.Event('submit', { cancelable: true }));
+  await f.settle();
+  assert.equal(f.$('editor').open, false, 'dialog closes after saving');
+  assert.equal(f.$('editor-error').textContent, '');
+  assert.match(f.$('items').textContent, /从对话框添加的待办/);
+  const saved = await f.methods.get('read')({ target: 'scratchpad' }, f.ctx);
+  assert.equal(saved.count, 1);
+});
+
+test('save buttons work on click without form submission (the host sandbox has no allow-forms)', async (t) => {
+  const f = await mount(t);
+  // 结构保证：依赖 submit 事件在宿主里永远不会触发。
+  assert.equal(f.$('save-edit').getAttribute('type'), 'button');
+  assert.equal(f.$('save-settings').getAttribute('type'), 'button');
+
+  f.$('add').click();
+  f.$('edit-content').value = '点击保存的记忆';
+  f.$('save-edit').click();
+  await f.settle();
+  assert.equal(f.$('editor').open, false);
+  assert.match(f.$('items').textContent, /点击保存的记忆/);
+
+  f.clickTab('settings');
+  await f.settle();
+  f.$('maxMemories').value = '17';
+  f.$('save-settings').click();
+  await f.settle();
+  assert.equal((await f.methods.get('status')({}, f.ctx)).settings.maxMemories, 17);
 });

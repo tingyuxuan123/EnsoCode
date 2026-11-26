@@ -1,0 +1,142 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"x": -2403.0975679448193,
+		"y": -43.685506482901246,
+		"zoom": 0.7888735458538515
+	},
+	"frames": [
+		{
+			"id": "daily",
+			"file": "frames/daily.tsx",
+			"x": 51,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "每日日志",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "每日日志"
+			}
+		},
+		{
+			"id": "editor",
+			"file": "frames/editor.tsx",
+			"x": 5760,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "新增记忆",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "新增记忆"
+			}
+		},
+		{
+			"id": "icons",
+			"file": "frames/icons.tsx",
+			"x": 7200,
+			"y": 0,
+			"width": 520,
+			"height": 560,
+			"title": "图标轨",
+			"meta": {
+				"width": 520,
+				"height": 560,
+				"title": "图标轨"
+			}
+		},
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 1440,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "长期记忆",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "长期记忆"
+			}
+		},
+		{
+			"id": "paused",
+			"file": "frames/paused.tsx",
+			"x": 7800,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "记忆已暂停",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "记忆已暂停"
+			}
+		},
+		{
+			"id": "search",
+			"file": "frames/search.tsx",
+			"x": 9240,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "搜索",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "搜索"
+			}
+		},
+		{
+			"id": "settings",
+			"file": "frames/settings.tsx",
+			"x": 10680,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "设置",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "设置"
+			}
+		},
+		{
+			"id": "todos",
+			"file": "frames/todos.tsx",
+			"x": 2880,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "待办",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "待办"
+			}
+		},
+		{
+			"id": "trash",
+			"file": "frames/trash.tsx",
+			"x": 4320,
+			"y": 0,
+			"width": 1360,
+			"height": 840,
+			"title": "最近删除",
+			"meta": {
+				"width": 1360,
+				"height": 840,
+				"title": "最近删除"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1360,
+		"height": 840
+	},
+	"interactionMode": "desktop"
+}

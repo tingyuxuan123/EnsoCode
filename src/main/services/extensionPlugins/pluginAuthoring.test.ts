@@ -41,7 +41,7 @@ it('creates a valid starter in the bound worktree and never resets edits on re-o
   const generated = await draft();
   const root = join(project, generated.directory);
   expect(await readdir(root)).toEqual(
-    expect.arrayContaining(['enso-plugin.json', 'main.mjs', 'ui.js'])
+    expect.arrayContaining(['enso-plugin.json', 'main.mjs', 'view.html', 'HOST-CAPABILITIES.md'])
   );
   await writeFile(join(root, 'main.mjs'), 'throw new Error("must not execute");');
   await expect(draft()).resolves.toEqual(generated);
@@ -68,7 +68,9 @@ it('rejects a wrong owner, a stale worktree, an edited plugin ID and a replaced 
   });
   await rename(root, join(temp, 'moved'));
   await symlink(join(temp, 'moved'), root, 'junction');
-  await expect(authoring.validate(1, 'session', generated.id)).rejects.toThrow();
+  await expect(authoring.validate(1, 'session', generated.id)).resolves.toMatchObject({
+    ok: false,
+  });
 });
 
 it('stages the real permissions without installing and discards a stale preview', async () => {
@@ -95,7 +97,7 @@ it('stages the real permissions without installing and discards a stale preview'
     const preview = await authoring.stage(1, 'session', generated.id, service);
     expect(preview).toMatchObject({
       ok: true,
-      preview: { id: generated.id, permissions: ['ui.slot', 'composer.draft'] },
+      preview: { id: generated.id, permissions: ['ui.view'] },
     });
     expect(service.list().plugins).toEqual([]);
     expect(fork).not.toHaveBeenCalled();
@@ -104,6 +106,9 @@ it('stages the real permissions without installing and discards a stale preview'
 
     let staleToken: string | undefined;
     const staging = {
+      list: service.list.bind(service),
+      installedPackage: service.installedPackage.bind(service),
+      uninstall: service.uninstall.bind(service),
       stage: async (...args: Parameters<ExtensionPluginService['stage']>) => {
         const result = await service.stage(...args);
         if (result.ok) staleToken = result.preview.token;

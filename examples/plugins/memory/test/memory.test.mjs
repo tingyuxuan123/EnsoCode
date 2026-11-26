@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { analysisPrompt, parseAnalysis } from '../automation.mjs';
-import { buildContext, looksSensitive, search, tokenize } from '../domain.mjs';
+import { buildContext, contextSections, looksSensitive, search, tokenize } from '../domain.mjs';
 import { createMemoryService } from '../service.mjs';
 
 async function fixture(t) {
@@ -156,6 +156,71 @@ test('context prioritizes todos/today/pinned memories/yesterday, bounds length a
   assert.ok(text.length <= 16000);
   await service.settings({ enabled: false });
   assert.equal(buildContext(await service.state(), a.projectRoot, '', clock.now), '');
+});
+
+test('context sections describe exactly the text the worker receives', async (t) => {
+  const { service, a, clock } = await fixture(t);
+  await service.scratchpad({ action: 'add', text: '待办优先' }, a);
+  await service.write({ target: 'daily', content: '今日记录' }, a);
+  await service.write({ content: '长期记忆一', pinned: true }, a);
+  const state = await service.state();
+
+  const report = contextSections(state, a.projectRoot, '', clock.now);
+  assert.equal(report.text, buildContext(state, a.projectRoot, '', clock.now));
+  assert.equal(report.total, report.text.length);
+  assert.equal(report.budget, state.settings.maxChars);
+  assert.deepEqual(
+    report.sections.map((section) => section.key),
+    ['todos', 'today', 'memory', 'related', 'yesterday']
+  );
+  const byKey = Object.fromEntries(report.sections.map((section) => [section.key, section]));
+  assert.equal(byKey.todos.included, 1);
+  assert.equal(byKey.today.included, 1);
+  assert.equal(byKey.memory.included, 1);
+  assert.equal(byKey.related.on, false);
+  assert.equal(byKey.memory.rows, 1);
+  assert.ok(byKey.memory.chars > 0);
+  // Section bodies are a partition of the block minus the one-line header.
+  const summed = report.sections.reduce((sum, section) => sum + section.chars, 0);
+  assert.ok(summed <= report.total);
+  assert.ok(report.total - summed < 400);
+
+  await service.settings({ enabled: false });
+  const off = contextSections(await service.state(), a.projectRoot, '', clock.now);
+  assert.equal(off.text, '');
+  assert.equal(off.total, 0);
+  assert.ok(off.sections.every((section) => section.included === 0));
+});
+
+test('context method reports the pack for the current project only', async (t) => {
+  const { service, a, b } = await fixture(t);
+  await service.write({ content: 'A 项目的长期记忆', pinned: true }, a);
+  const mine = await service.context({}, a);
+  const theirs = await service.context({}, b);
+  assert.equal(mine.enabled, true);
+  assert.equal(mine.budget, 12000);
+  assert.equal(mine.sections.find((section) => section.key === 'memory').included, 1);
+  assert.equal(theirs.sections.find((section) => section.key === 'memory').included, 0);
+  assert.deepEqual(mine.skipped, []);
+  await service.settings({ maxMemories: 1 });
+  await service.write({ content: '第二条不会进入上下文' }, a);
+  const capped = await service.context({}, a);
+  assert.equal(capped.memoryVisible, 2);
+  assert.equal(capped.skipped.length, 1);
+  // Pinned first, so the cap keeps the pinned record and leaves the newer one out.
+  assert.deepEqual(capped.skipped, ['第二条不会进入上下文']);
+});
+
+test('trash reports per-batch sources and up to three previews', async (t) => {
+  const { service, a } = await fixture(t);
+  const first = await service.write({ content: '第一条要删的记忆' }, a);
+  const second = await service.write({ content: '第二条要删的记忆' }, a);
+  await service.forget({ ids: [first.memory.id, second.memory.id] }, a);
+  const [batch] = (await service.trash({}, a)).items;
+  assert.equal(batch.count, 2);
+  assert.equal(batch.sources.memories, 2);
+  assert.equal(batch.previews.length, 2);
+  assert.match(batch.previews[0], /要删的记忆/);
 });
 
 test('capacity errors do not silently evict pinned memories or destroy recovery history', async (t) => {

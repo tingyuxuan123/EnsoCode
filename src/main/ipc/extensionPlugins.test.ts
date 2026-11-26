@@ -30,6 +30,101 @@ const trust = {
   settingsUrl: 'file:///app/renderer/settings.html',
 };
 describe('privileged native plugin IPC', () => {
+  it('exports only the bound package through a native save choice and returns checksum, not an arbitrary path', async () => {
+    const temp = await mkdtemp(join(tmpdir(), 'authoring-export-ipc-'));
+    const file = join(temp, 'package.zip'),
+      destination = join(temp, 'chosen.zip');
+    await writeFile(file, 'checked package bytes');
+    const cleanup = vi.fn(async () => {}),
+      save = vi.fn(async () => destination),
+      exported = vi.fn(async () => ({
+        file,
+        name: 'a.b-1.0.0.zip',
+        id: 'a.b',
+        version: '1.0.0',
+        sha256: 'a'.repeat(64),
+        size: 21,
+        cleanup,
+      }));
+    try {
+      const h = createExtensionPluginHandlers({
+        trusted: () => true,
+        authoringTrusted: () => true,
+        authoring: { create: vi.fn(), validate: vi.fn(), stage: vi.fn(), export: exported },
+        save,
+        service: () => ({}) as never,
+        draft: () => ({}) as never,
+        projectRoot: () => null,
+        pick: vi.fn(),
+      });
+      const sender = event();
+      const result = await h.exportAuthoringDraft(sender, 's', 'a.b');
+      expect(result).toEqual({ ok: true, name: 'a.b-1.0.0.zip', sha256: 'a'.repeat(64), size: 21 });
+      expect(save).toHaveBeenCalledWith(sender, 'a.b-1.0.0.zip');
+      expect(cleanup).toHaveBeenCalledOnce();
+      expect(await h.exportAuthoringDraft(event(), 's', 'a.b', '/other/path')).toMatchObject({
+        ok: false,
+      });
+      expect(exported).toHaveBeenCalledOnce();
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+    }
+  });
+  it('authoring lifecycle rejects arbitrary paths, extra proof fields, absent execution consent and non-main frames', async () => {
+    const context = vi.fn(),
+      open = vi.fn(),
+      test = vi.fn(),
+      evidence = vi.fn(),
+      finishTrial = vi.fn();
+    const h = createExtensionPluginHandlers({
+      trusted: (e) => isTrustedPluginSender(e, trust),
+      authoringTrusted: (e) => e.sender.id === 7,
+      authoring: {
+        create: vi.fn(),
+        validate: vi.fn(),
+        stage: vi.fn(),
+        context,
+        open,
+        editInstalled: vi.fn(),
+        test,
+        evidence,
+        finishTrial,
+      },
+      service: () => ({}) as never,
+      draft: () => ({}) as never,
+      projectRoot: () => null,
+      pick: vi.fn(),
+    });
+    for (const bad of [event(8, trust.settingsUrl), event(7, trust.mainUrl, true)]) {
+      expect(await h.authoringContext(bad, 's')).toMatchObject({ ok: false });
+      expect(await h.testAuthoringDraft(bad, 's', 'a.b', true)).toMatchObject({ ok: false });
+    }
+    expect(await h.openAuthoringDraft(event(), 's', '/etc/passwd')).toMatchObject({ ok: false });
+    expect(await h.testAuthoringDraft(event(), 's', 'a.b', false)).toMatchObject({ ok: false });
+    expect(await h.finishAuthoringTrial(event(), 's', 'a.b', true, '/data')).toMatchObject({
+      ok: false,
+    });
+    expect(
+      await h.createAuthoringDraft(event(), 's', {
+        template: 'workspace',
+        request: 'notes',
+        cwd: '/private',
+      })
+    ).toMatchObject({ ok: false });
+    expect(
+      await h.authoringEvidence(event(), 's', 'a.b', {
+        layer: 'business',
+        sourceHash: 'a'.repeat(64),
+        note: 'verified',
+        path: '/secret',
+      })
+    ).toMatchObject({ ok: false });
+    expect(context).not.toHaveBeenCalled();
+    expect(test).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    expect(evidence).not.toHaveBeenCalled();
+    expect(finishTrial).not.toHaveBeenCalled();
+  });
   it('only the main window can create a plugin draft, and can only send a session id', async () => {
     const draft = { id: 'local.example', directory: 'plugin-example' };
     const create = vi.fn(async () => ({ ok: true as const, draft }));

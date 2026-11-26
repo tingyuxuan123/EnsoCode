@@ -1,0 +1,48 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/hanken-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Direction 上下文账本 — Kettu dark, 狐狸橙 accent.
+ * These are Kettu's own values (shared.css / globals.css). The accent stays a
+ * variable: CodeKiln injects --brand at runtime, so picking 晴空蓝 / 青绿 / 琥珀
+ * in 设置 → 强调色 re-skins the whole view without touching this file. */
+@theme {
+	--color-surface: #141416;
+	--color-panel: #212124;
+	--color-raise: #2a2a2d;
+	--color-shell: #0e0e10;
+	--color-surface-foreground: #e6e6e7;
+	--color-muted: #ababad;
+	--color-faint: #8b8b90;
+	--color-line: #2e2e33;
+	--color-line-soft: #26262a;
+	--color-primary: var(--brand, #f2581b);
+	--color-primary-foreground: var(--brand-foreground, #ffffff);
+	--color-brand: var(--brand, #f2581b);
+	--color-brand-tint: #402217;
+	--color-danger: #ea8a7d;
+	--color-danger-tint: #3a2320;
+	--color-success: #6fbf8f;
+	--radius-card: 6px;
+	--font-display: "Hanken Grotesk Variable", "PingFang SC", "Microsoft YaHei",
+		ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui,
+		sans-serif;
+	--font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@layer base {
+	html,
+	body,
+	#root {
+		height: 100%;
+	}
+
+	body {
+		margin: 0;
+		background: var(--color-surface);
+		color: var(--color-surface-foreground);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+	}
+}
