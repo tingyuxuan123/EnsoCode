@@ -1,0 +1,56 @@
+---
+description: "插件 session.inject 的交付契约：冷/空白会话唤醒、完整 wire→严格 parser、worker ACK、代次去重与未知投递不重放；待办复制不是执行。"
+kind: architecture
+code:
+  paths:
+    - src/shared/extensionPlugins/protocol.ts
+    - src/shared/types/agent.ts
+    - src/main/services/extensionPlugins/gate.ts
+    - src/main/services/extensionPlugins/service.ts
+    - src/main/services/extensionPlugins/service.test.ts
+    - src/main/services/extensionPlugins/injectionRequests.ts
+    - src/main/services/agentHost.ts
+    - src/main/ipc/agent.ts
+    - src/agent/supervisor.ts
+    - src/agent/pluginInjection.ts
+    - src/agent/pluginEvents.ts
+    - src/renderer/plugins/PluginUiHost.tsx
+    - src/renderer/stores/sessions/index.ts
+    - examples/plugins/memory/main.mjs
+    - examples/plugins/memory/service.mjs
+    - examples/plugins/memory/memory.html
+relations:
+  requires:
+    - sessions/message-projection.mdx
+  related:
+    - plugins/ui-workspace-scope.mdx
+    - plugins/background-agent-runs.mdx
+---
+
+# 插件会话注入与接收确认
+
+`session.inject` 把插件消息交给目标主会话，不是后台 `agent.run`。**传输写成功、worker 接收、模型完成是不同阶段**；待办不能把其中任一阶段伪装成另一阶段。
+
+## 目标与唤醒
+
+- `agent.inject` 权限不能代替跨会话授权；目标不是 invocation 的发起会话时，仍需用户开启跨会话发送。显式 UI 项目范围没有发起会话，不能因此免掉该开关。
+- `scope:'workspace'` 的会话列表和 `sameWorkspace:true` 的注入约束都由 Main 以真实 root 精确判定，不只比较项目 ID。注入前及异步唤醒后重新检查目标仍在该工作区的可用根会话列表，防止列表失效或 worktree 混用。
+- 未就绪会话先走原恢复/启动路径；插件 UI 的 ensure 显式允许无历史的空白会话，复用其模型和工作区解析，不靠占位消息启动。空闲并不意味着不能开轮：`followUp + triggerTurn` 可启动运行；`nextTurn` 是等待后续轮次，不能当作开轮保证。
+
+## 接收边界与失败语义
+
+- 各桥接层**显式投影 wire 字段**，不展开上层请求对象。内部路由字段、取消 signal 等泄漏到 `plugin-inject` 顶层会被严格 consumer parser 拒收；生产者测试必须把真实完整输出交给真实 parser，而不是只测手写的合法样本。
+- Main 为每次投递分配 `requestId` 并捕获实际 `SessionIdentity`，只有匹配请求和活代次的 worker ACK 才算接收成功。ACK 证明准入，不等待模型整轮结束；后续启动/执行失败仍通过目标会话的正常错误路径可见。
+- worker 按投递 ID 缓存接收结果，同一 ID 不再执行；旧代命令不能投到新代。只清理已失效代次的回执，活代回执达到硬容量时拒绝新投递，不能用 LRU 淘汰把已执行 ID 重新变成可执行。
+- 压缩期间明确拒绝注入，同时检查宿主压缩状态与 SDK 的 `isCompacting`，不静默延后重放；压缩结束后需要新请求。
+- worker 退出、会话换代、取消或 ACK 超时都不能触发自动重试：未确认不等于未执行。注入不进入通用重启/未就绪命令积压队列；只有明确尚未运行、尚未准入的目标可先唤醒再尝试。结果未知时先查目标历史，由用户决定是否重新发起。
+
+`src/main/services/extensionPlugins/injectionRequests.ts`（`PluginInjectionRequests`）拥有确认边界；`src/agent/pluginInjection.ts`（`PluginInjectionReceiver`）拥有 worker 准入与防重放边界。
+
+## 待办：接收不是完成，复制不是执行
+
+- 发送前读取所选待办的全部原图并验证可投递性；缺失、不支持或超限就整次拒发，保留原记录。存储能保存的附件不必然都能发给模型，不能静默截断或拿缩略图冒充原图。
+- 同一次 UI 投递合并重复点击。收到 worker ACK 后，只有发送快照仍与当前记录一致且仍未开始，才以 CAS 标为 `doing`；不能覆盖 Agent 已先完成或用户刚改写的记录。`done` 来自显式待办更新，不来自 ACK。
+- 仅复制指令不启动执行，也不改变待办状态；不能未经对齐把直发降级为复制后宣称已开始。
+
+验收从真实页面入口追到完整 wire/parser、worker ACK 和 worker / JSONL 权威历史，再核对工具回写及冷恢复。接口返回、替身测试全绿或 provider 未收到请求，单独都不足以证明交付或确定根因；消费者闭环前只保留待核验假说。

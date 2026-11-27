@@ -1,0 +1,37 @@
+---
+description: "插件 UI 项目选择与 Agent 上下文解耦：标识符授权、Main 权威 canonical/worktree root、异步编辑范围与私有记忆归属。"
+kind: architecture
+code:
+  paths:
+    - src/shared/extensionPlugins/workspace.ts
+    - src/main/services/extensionPlugins/workspaceProjects.ts
+    - src/main/ipc/extensionPlugins.ts
+    - src/main/ipc/agent.ts
+    - src/renderer/plugins/workspaceBridge.ts
+    - src/renderer/plugins/PluginView.tsx
+    - src/renderer/public/plugin-view.html
+    - examples/plugins/memory/memory.html
+    - examples/plugins/memory/service.mjs
+relations:
+  related:
+    - plugins/background-agent-runs.mdx
+    - plugins/session-injection.mdx
+---
+
+# 插件 UI 项目范围与 Agent 归属
+
+项目选择决定插件页面接下来读写哪个工作区，**不切换聊天，也不改 Agent 的执行上下文**。页面范围、会话身份和数据归属是三件事；不能用「当前项目」这个展示概念把它们合并。
+
+## Main 授权根，Renderer 只选标识符
+
+- UI 只传 `projectId`，隔离 worktree 可再带已登记的根 `conversationId`；不接收磁盘路径。Main 只接受 active 本地项目，并校验根会话未结束、属于同一项目；项目目录取 canonical root，worktree 取会话的权威 root。`null` 明确选择全局，不是无效标识符的降级结果。
+- 显式项目范围仅用于 `renderer.call`，必须同时令 `sessionId=null`。不能把 A 会话的身份/代次和 B 的目录拼成一个 invocation；没有会话身份也不能假装继承 A 的权限。后台事件、工具和 `agent.run` 仍使用原发起会话的上下文。
+- 页面实例在显式选择前绑定打开时的会话；后台活动聊天变化不会重定向它。选择属于该页面实例，不是全局活动项目状态；切换需要用户手势。
+
+## 范围切换不是迁移
+
+- 调用发起时捕获范围，后续选择不能把已在途的保存改投另一项目；并发选择以最新一次为准，不能让较晚返回的旧选择覆盖它。
+- 记忆插件以宿主推导的工作区根识别私有数据归属，切换只改变可见范围和后续操作，不搬移旧记录，也不提升成全局。编辑已有记录不能借 scope 字段重写所有者。
+- 记忆页面有未结束的编辑、发送确认或写入时拒绝切项目；切换未完成时禁止新编辑和发送。切换后清空旧范围分页/筛选状态，并拒绝旧列表响应，避免把旧行当作新项目的数据继续操作。
+
+权威解析见 `src/main/services/extensionPlugins/workspaceProjects.ts`（`resolveWorkspaceProject`）；页面调用范围的捕获见 `src/renderer/plugins/workspaceBridge.ts`（`createWorkspaceBridge`）。会话目标与跨会话投递约束归邻接的注入契约所有。
