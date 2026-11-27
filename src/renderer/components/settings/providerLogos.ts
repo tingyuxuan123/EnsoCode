@@ -1,4 +1,72 @@
-export type ProviderLogo = { kind: 'mark'; path: string } | { kind: 'letter'; letter: string };
+/**
+ * 厂商标的三种形态：
+ * - `asset`：内置官方 SVG（`src/renderer/assets/provider-icons/`），能保留品牌配色；
+ * - `mark`：单色内联 path，给没有官方资源的厂商兜底（GitHub Copilot / Cursor / Devin 等）；
+ * - `letter`：认不出的厂商取展示名首字母。
+ */
+export type ProviderLogo =
+  | { kind: 'asset'; src: string; appearance: 'color' | 'monochrome' }
+  | { kind: 'mark'; path: string }
+  | { kind: 'letter'; letter: string };
+
+/** 厂商 id（`providerGroups` 的 vendorId 命名域）→ 资源名。缺项表示没有官方 SVG。 */
+export const ASSET_LOGO_SYMBOLS: Readonly<Record<string, string>> = {
+  anthropic: 'claude',
+  openai: 'openai',
+  google: 'gemini',
+  xai: 'grok',
+  deepseek: 'deepseek',
+  openrouter: 'openrouter',
+  moonshot: 'kimi',
+  zhipu: 'zhipu',
+  minimax: 'minimax',
+  mistral: 'mistral',
+  alibaba: 'qwen',
+  groq: 'groq',
+  local: 'ollama',
+  magpie: 'magpie',
+};
+
+/**
+ * 单色标：SVG 里写的是 `fill="currentColor"`。当 `<img>` 用会被解析成黑色，
+ * 深色主题下等于看不见，必须走 mask + `bg-current` 染色。
+ */
+const MONOCHROME_SYMBOLS: ReadonlySet<string> = new Set([
+  'openai',
+  'grok',
+  'kimi',
+  'ollama',
+  'openrouter',
+  'groq',
+  'magpie',
+]);
+
+// `?no-inline`：品牌标作为资源产出，不把它们塞进主 chunk。
+const ICON_PATHS = import.meta.glob('../../assets/provider-icons/*.svg', {
+  eager: true,
+  query: '?no-inline',
+  import: 'default',
+}) as Record<string, string>;
+
+const ICON_URLS = new Map(
+  Object.entries(ICON_PATHS).map(([file, url]) => [
+    file.slice(file.lastIndexOf('/') + 1, -'.svg'.length),
+    url,
+  ])
+);
+
+function assetLogo(canonical: string): ProviderLogo | null {
+  if (!Object.hasOwn(ASSET_LOGO_SYMBOLS, canonical)) return null;
+  const symbol = ASSET_LOGO_SYMBOLS[canonical];
+  const src = ICON_URLS.get(symbol);
+  // 资源缺失时继续走内联 path，不要返回一个空 src 让 UI 画空气
+  if (!src) return null;
+  return {
+    kind: 'asset',
+    src,
+    appearance: MONOCHROME_SYMBOLS.has(symbol) ? 'monochrome' : 'color',
+  };
+}
 
 const MARKS: Readonly<Record<string, string>> = {
   anthropic:
@@ -53,6 +121,8 @@ function fallbackLetter(id: string, label?: string): string {
 export function resolveProviderLogo(id: string, label?: string): ProviderLogo | null {
   if (id === '__custom') return null;
   const canonical = ALIASES[id] ?? id;
+  const asset = assetLogo(canonical);
+  if (asset) return asset;
   const path = MARKS[canonical];
   if (path) return { kind: 'mark', path };
   return { kind: 'letter', letter: fallbackLetter(id, label) };

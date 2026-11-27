@@ -57,8 +57,7 @@ export function desktopComposerCommands(
     .sort(
       (a, b) =>
         commandGroup(a) - commandGroup(b) || Number(Boolean(b.bundled)) - Number(Boolean(a.bundled))
-    )
-    .slice(0, 10);
+    );
 }
 
 export const SESSION_COMMAND_DETAILS: Partial<

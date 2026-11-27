@@ -1,0 +1,46 @@
+@import "@fontsource-variable/inter-tight";
+@import "@fontsource-variable/inter";
+
+/*
+ * 跟随应用现有深色主题（Kettu）：
+ * shell #0e0e10（侧栏）· surface #141416（内容面）· card #212124（卡片）·
+ * brand #f2581b · 白 12% 描边 · radius 6。
+ */
+@theme {
+	--color-shell: #0e0e10;
+	--color-surface: #141416;
+	--color-card: #212124;
+	--color-tile: #1a1a1d;
+	/* 叠加层：抽屉比卡片再亮一档，居中弹层比抽屉暗一档（内容密度更高） */
+	--color-raised: #232326;
+	--color-sheet: #1e1e21;
+	--color-foreground: #e6e6e7;
+	--color-muted: #ababad;
+	--color-faint: #8d8d92;
+	--color-line: #26262a;
+	--color-border: #303035;
+	--color-brand: #f2581b;
+	--color-brand-foreground: #ffffff;
+		/* 设置弹窗的桌面环境：主窗口剪影与遮罩下的深底 */
+	--color-desk: #08080a;
+	/* macOS 窗口控件：关闭 / 最小化 / 全屏 */
+	--color-traffic-close: #ff5f57;
+	--color-traffic-min: #febc2e;
+	--color-traffic-max: #28c840;
+
+	/* 品牌标专用色：智谱 GLM 的官方蓝，仅用于 ProviderMark 字形块 */
+	--color-zhipu: #3752ff;
+	--color-zhipu-soft: #6b7dff;
+	--color-success: #6fbf8f;
+	--color-warning: #d9b463;
+	--color-destructive: #ea8a7d;
+	--color-info: #aeb6c1;
+
+	--radius-card: 6px;
+
+	--font-display: "Inter Tight Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif,
+		system-ui, sans-serif;
+	--font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui,
+		sans-serif;
+	--font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}

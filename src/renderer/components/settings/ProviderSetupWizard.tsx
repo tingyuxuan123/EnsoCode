@@ -20,6 +20,7 @@ import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { autoProviderName, OauthProviderAccounts } from './OauthProvidersDialog';
 import { ProviderApiForm } from './ProviderApiForm';
+import { ProviderMarkLogo } from './ProviderMark';
 import { resolveProviderLogo } from './providerLogos';
 import { availableProviderSetupMethods, initialProviderApiValue } from './providerSetup';
 
@@ -405,16 +406,5 @@ export function ProviderSetupWizard({ open, onOpenChange }: ProviderSetupWizardP
 function ProviderCatalogMark({ id, label }: { id: string; label: string }) {
   const logo = resolveProviderLogo(id, label);
   if (!logo) return <Puzzle className="h-4 w-4 text-muted-foreground" />;
-  if (logo.kind === 'letter') {
-    return (
-      <span className="text-[calc(12rem/14)] font-semibold text-muted-foreground">
-        {logo.letter}
-      </span>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>
-      <path d={logo.path} />
-    </svg>
-  );
+  return <ProviderMarkLogo logo={logo} className="h-4 w-4 text-muted-foreground" />;
 }

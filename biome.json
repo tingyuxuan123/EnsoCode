@@ -78,6 +78,7 @@
       "!src/shared/providers/devin/vendor",
       "!src/renderer/features/design/vetta",
       "!src/renderer/assets/file-icons",
+      "!src/renderer/assets/provider-icons",
       "!resources/design"
     ]
   },

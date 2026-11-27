@@ -1,0 +1,161 @@
+{
+	"version": 1,
+	"mode": "app",
+	"input": {
+		"brief": "Settings window of CodeKiln, a local-first desktop AI coding workbench: model providers and model routing for the agent sessions.",
+		"screens": [
+			"模型中心 · 服务商与模型路由",
+			"外观 · 主题与界面密度"
+		],
+		"keep": [],
+		"avoid": [],
+		"product": "desktop"
+	},
+	"seed": 36935480,
+	"at": "2026-11-26T08:36:05.265Z",
+	"options": [
+		"dispatch-board",
+		"inventory-sheet",
+		"service-inspector"
+	],
+	"choice": {
+		"proposalId": "dispatch-board"
+	},
+	"allow": [
+		"tell-mono"
+	],
+	"intent": {
+		"stated": {
+			"mood": "current desktop settings page, tidy dev tool, dense but calm",
+			"colour": "dark charcoal + brand orange #f2581b",
+			"emphasis": "model providers and which model answers by default",
+			"brand": "CodeKiln",
+			"boldness": "restrained",
+			"preferences": [
+				{
+					"question": "颜色、字体、字号怎么处理？",
+					"answer": "跟随应用现有主题：深色 #141416 面板、品牌橙 #f2581b、Inter / Inter Tight、现有字号层级；这次只改布局风格，不改视觉语言。"
+				},
+				{
+					"question": "布局重点是什么？",
+					"answer": "把模型槽位（默认/标题总结/代审/子代理/虚拟模型）从五段独立堆叠合成一块可扫读的结构，让宽屏宽度被真正用上：标签与控件左右分栏、操作按钮跟随各自区块、层级分组替代长串 40px 空白的横线。"
+				},
+				{
+					"question": "这次做哪些页面？",
+					"answer": "以模型中心为主，另加一页外观设置，用来验证同一套 shell 在次级页也成立。"
+				}
+			]
+		},
+		"questions": [],
+		"answers": null
+	},
+	"obvious": "Dark #141416 panel, 240px sidebar of 16 flat category rows with an orange-tinted active pill, one scrolling column: each section is an 18px heading + one grey line + the control underneath, hairlines between sections, every block the same weight, Inter everywhere, orange toggles.",
+	"proposals": [
+		{
+			"id": "dispatch-board",
+			"name": "调度台",
+			"idea": "On these screens, the four model slots (默认 / 标题 / 代审 / 子代理) plus the virtual router become a routing table — a dispatch board where each role row names the model that answers it, its context and what happens when that model is down.",
+			"departs": "The obvious build stacks each setting as a full-width block with a 1100px gap between a heading and its own toggle. Here the roles are one table: role on the left edge, model · context · fallback aligned in columns, so five settings become one glanceable object; the category list shrinks to a 56px rail to give the table the width.",
+			"theme": "dark",
+			"colours": {
+				"ground": "#131316",
+				"panel": "#1b1b1f",
+				"text": "#e8e8ea",
+				"muted": "#8f8f95",
+				"accent": "#5a9bfc",
+				"onAccent": "#0b1220",
+				"extra": {
+					"good": "#6fbf8f",
+					"line": "#2a2a2f",
+					"warn": "#d9b463"
+				}
+			},
+			"type": {
+				"display": "Schibsted Grotesk",
+				"text": "Inter",
+				"class": "grotesk-tight"
+			},
+			"layout": "56px icon rail for the 16 categories, then the panel splits: a 940px routing table (role × model × fallback) with the provider inventory as a 320px column on the right holding health dot, port and model count. The first screen's largest element is the default-model row; the single accent appears only on the live/selected state.",
+			"radius": 8,
+			"shell": "rail",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "model ids, ports and context sizes sit in aligned columns; proportional digits break the vertical line the table depends on"
+				}
+			]
+		},
+		{
+			"id": "inventory-sheet",
+			"name": "名册 · 表单",
+			"idea": "On these screens, the product's own rule that a change binds to new sessions ('新会话生效') becomes the spine: every row carries the scope it binds to on its left, so the page reads like an inventory sheet — what it is, what it does, when it takes effect — instead of a stack of anonymous cards.",
+			"departs": "Light paper ground instead of the app's dark one, a geometric display face instead of Inter, grouped and labelled navigation instead of 16 identical pills, and label-left / control-right form rows instead of heading-above-control stacks — the page gets shorter by half and each row's state is readable from one horizontal scan.",
+			"theme": "light",
+			"colours": {
+				"ground": "#f6f6f7",
+				"panel": "#ffffff",
+				"text": "#17171a",
+				"muted": "#6f6f76",
+				"accent": "#bf4410",
+				"onAccent": "#ffffff",
+				"extra": {
+					"good": "#2f8a5b",
+					"line": "#e4e4e7",
+					"warn": "#a8730f"
+				}
+			},
+			"type": {
+				"display": "Jost",
+				"text": "Inter",
+				"class": "geometric"
+			},
+			"layout": "248px sidebar with five grouped labels (通用 / 界面 / 模型 / 扩展 / 系统) and a 960px form column: 34% label with its scope note, 66% control, 60-72px rows, sections separated by space alone, one 2px accent rule under the page title.",
+			"radius": 6,
+			"shell": "sidebar",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "model ids and ports are data, not prose; monospace keeps 127.0.0.1:3425 and reasoning effort marks from reflowing between rows"
+				}
+			]
+		},
+		{
+			"id": "service-inspector",
+			"name": "窑口 · 检查器",
+			"idea": "On these screens, the local daemon at 127.0.0.1:3425 becomes the first object on the page — a live service tile with port, model count and health — and a persistent right-hand inspector states what the change you are about to make does to the next session.",
+			"departs": "A heavy display masthead and a teal accent instead of a quiet Inter title and orange; the category list becomes a searchable index with a one-line description per entry; and the right inspector column replaces hairlines as the thing that separates blocks.",
+			"theme": "dark",
+			"colours": {
+				"ground": "#101312",
+				"panel": "#191d1b",
+				"text": "#e9eeeb",
+				"muted": "#8a938f",
+				"accent": "#2fa98c",
+				"onAccent": "#06120e",
+				"extra": {
+					"good": "#5fb08c",
+					"line": "#242a27",
+					"warn": "#cfa25a"
+				}
+			},
+			"type": {
+				"display": "Chivo",
+				"text": "Archivo",
+				"class": "heavy-black"
+			},
+			"layout": "300px searchable index (name + one grey line each) · 700px roster column led by the local-service tile, then providers, then the four model slots · 320px inspector holding session scope, health and usage. Masthead '模型中心' at 34px heavy with the count of enabled providers beside it.",
+			"radius": 10,
+			"shell": "split",
+			"breaks": "",
+			"devices": [
+				{
+					"device": "mono",
+					"reason": "the service tile is built from a port, a path and a model count; monospace makes the address read as an address"
+				}
+			]
+		}
+	],
+	"redraws": []
+}

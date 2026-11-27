@@ -1,6 +1,11 @@
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
 import { STATIC_PROVIDER_DEFINITIONS } from '@shared/providerCatalog';
 import { describe, expect, it } from 'vitest';
-import { resolveProviderLogo } from './providerLogos';
+import { ASSET_LOGO_SYMBOLS, resolveProviderLogo } from './providerLogos';
+
+const ASSET_DIR = path.resolve(import.meta.dirname, '../../assets/provider-icons');
+const ASSET_FILES = new Set(readdirSync(ASSET_DIR).filter((file) => file.endsWith('.svg')));
 
 describe('向导厂商 logo', () => {
   it('Custom 不挂品牌标', () => {
@@ -12,7 +17,7 @@ describe('向导厂商 logo', () => {
       if (definition.id === '__custom') continue;
       const logo = resolveProviderLogo(definition.id, definition.label);
       expect(logo, definition.id).not.toBeNull();
-      expect(logo?.kind === 'mark' || logo?.kind === 'letter').toBe(true);
+      expect(logo?.kind === 'mark' || logo?.kind === 'letter' || logo?.kind === 'asset').toBe(true);
     }
   });
 
@@ -28,6 +33,29 @@ describe('向导厂商 logo', () => {
     expect(resolveProviderLogo('cursor', 'Cursor')?.kind).toBe('mark');
     expect(resolveProviderLogo('devin', 'Devin')?.kind).toBe('mark');
     expect(resolveProviderLogo('zai', 'Z.AI')).toEqual(resolveProviderLogo('zhipu', 'Zhipu AI'));
+  });
+
+  it('有官方 SVG 的厂商标优先用资源，而不是内联 path', () => {
+    // 内联 path 是单色手绘兜底；资源是官方 mark，能保留品牌配色。
+    expect(resolveProviderLogo('anthropic')?.kind).toBe('asset');
+    expect(resolveProviderLogo('deepseek')?.kind).toBe('asset');
+    expect(resolveProviderLogo('magpie')?.kind).toBe('asset');
+    expect(resolveProviderLogo('xai')?.kind).toBe('asset');
+  });
+
+  it('彩色标与单色标分开：单色标必须走 mask 染色', () => {
+    // 单色标的 svg 写的是 fill="currentColor"，当 <img> 用会被解析成黑色，
+    // 深色主题下等于看不见 —— 外观必须跟着资源走，不能统一处理。
+    expect(resolveProviderLogo('anthropic')).toMatchObject({ appearance: 'color' });
+    expect(resolveProviderLogo('openai')).toMatchObject({ appearance: 'monochrome' });
+    expect(resolveProviderLogo('magpie')).toMatchObject({ appearance: 'monochrome' });
+  });
+
+  it('每个资源标都真的有文件，没有名字对不上的空标', () => {
+    const missing = Object.values(ASSET_LOGO_SYMBOLS).filter(
+      (symbol) => !ASSET_FILES.has(`${symbol}.svg`)
+    );
+    expect(missing).toEqual([]);
   });
 
   it('未知扩展厂商用展示名首字母，没有名称时用 id', () => {

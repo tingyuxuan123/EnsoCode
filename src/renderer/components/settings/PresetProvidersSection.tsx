@@ -5,7 +5,7 @@ import {
   presetPortOf,
 } from '@shared/presetProviders';
 import type { FetchedModel, ListModelsResult, ModelProvider } from '@shared/types';
-import { RefreshCw, Router } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { PresetProviderPortDialog } from './PresetProviderPortDialog';
+import { ProviderMark } from './ProviderMark';
 
 /**
  * 预设服务商：应用已经知道地址与密钥的本机服务，用户点一次启用即可。
@@ -230,6 +231,7 @@ export function PresetProvidersSection() {
         {rows.map((row) => (
           <PresetProviderRow
             key={row.preset.id}
+            id={row.preset.id}
             name={row.preset.name}
             baseUrl={row.baseUrl}
             provider={row.provider}
@@ -263,6 +265,8 @@ export function PresetProvidersSection() {
 }
 
 interface PresetProviderRowProps {
+  /** 厂商 id：用来取品牌标，和 `catalogId` 同一命名域。 */
+  id: string;
   name: string;
   baseUrl: string;
   provider: ModelProvider | undefined;
@@ -276,6 +280,7 @@ interface PresetProviderRowProps {
 }
 
 function PresetProviderRow({
+  id,
   name,
   baseUrl,
   provider,
@@ -299,7 +304,7 @@ function PresetProviderRow({
     >
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 items-center gap-2">
-          <Router className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <ProviderMark id={id} label={name} className="h-3.5 w-3.5 shrink-0 text-foreground" />
           <span
             className={cn(
               'truncate text-[calc(13rem/14)] font-medium',

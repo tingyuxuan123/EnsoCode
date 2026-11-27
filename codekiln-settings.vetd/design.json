@@ -1,0 +1,268 @@
+{
+	"version": 1,
+	"type": "vetta-design",
+	"canvas": {
+		"zoom": 0.5418747943795504,
+		"x": -9759.745841242151,
+		"y": 134.52359739523797
+	},
+	"frames": [
+		{
+			"id": "agent-type-edit",
+			"file": "frames/agent-type-edit.tsx",
+			"x": 19760,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "子代理类型 · 编辑与工具集",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "子代理类型 · 编辑与工具集"
+			}
+		},
+		{
+			"id": "agent-types-models",
+			"file": "frames/agent-types-models.tsx",
+			"x": 25840,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "子代理类型 · 候选模型（下滚）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "子代理类型 · 候选模型（下滚）"
+			}
+		},
+		{
+			"id": "agent-types",
+			"file": "frames/agent-types.tsx",
+			"x": 6080,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "子代理类型 · 类型清单",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "子代理类型 · 类型清单"
+			}
+		},
+		{
+			"id": "appearance",
+			"file": "frames/appearance.tsx",
+			"x": 27360,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "外观 · 主题、强调色与排版",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "外观 · 主题、强调色与排版"
+			}
+		},
+		{
+			"id": "delete-confirm",
+			"file": "frames/delete-confirm.tsx",
+			"x": 22800,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "删除服务商 · 先退登再删除",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "删除服务商 · 先退登再删除"
+			}
+		},
+		{
+			"id": "empty",
+			"file": "frames/empty.tsx",
+			"x": 7600,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "模型中心 · 还没有服务商",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "模型中心 · 还没有服务商"
+			}
+		},
+		{
+			"id": "index",
+			"file": "frames/index.tsx",
+			"x": 0,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "模型中心 · 服务商与模型路由",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "模型中心 · 服务商与模型路由"
+			}
+		},
+		{
+			"id": "local-import",
+			"file": "frames/local-import.tsx",
+			"x": 16720,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "从本机导入 · 扫描结果与去重",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "从本机导入 · 扫描结果与去重"
+			}
+		},
+		{
+			"id": "pool-provider",
+			"file": "frames/pool-provider.tsx",
+			"x": 21280,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "账号池 · 成员顺序与可用性",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "账号池 · 成员顺序与可用性"
+			}
+		},
+		{
+			"id": "provider-api",
+			"file": "frames/provider-api.tsx",
+			"x": 13680,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "添加服务商 · API Key 与首次拉取",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "添加服务商 · API Key 与首次拉取"
+			}
+		},
+		{
+			"id": "provider-drawer-preset",
+			"file": "frames/provider-drawer-preset.tsx",
+			"x": 24320,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "服务商详情 · 预设型（端口与快照）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "服务商详情 · 预设型（端口与快照）"
+			}
+		},
+		{
+			"id": "provider-drawer-sub",
+			"file": "frames/provider-drawer-sub.tsx",
+			"x": 10640,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "服务商详情 · 订阅型（额度 / 账号池 / 退登失败）",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "服务商详情 · 订阅型（额度 / 账号池 / 退登失败）"
+			}
+		},
+		{
+			"id": "provider-drawer",
+			"file": "frames/provider-drawer.tsx",
+			"x": 3040,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "服务商详情 · API Key 型",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "服务商详情 · API Key 型"
+			}
+		},
+		{
+			"id": "provider-edit",
+			"file": "frames/provider-edit.tsx",
+			"x": 15200,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "编辑服务商 · 模型清单与覆盖",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "编辑服务商 · 模型清单与覆盖"
+			}
+		},
+		{
+			"id": "provider-setup",
+			"file": "frames/provider-setup.tsx",
+			"x": 12160,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "添加服务商 · 选择厂商",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "添加服务商 · 选择厂商"
+			}
+		},
+		{
+			"id": "refreshing",
+			"file": "frames/refreshing.tsx",
+			"x": 9120,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "模型中心 · 刷新全部模型的结果",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "模型中心 · 刷新全部模型的结果"
+			}
+		},
+		{
+			"id": "route-sheet",
+			"file": "frames/route-sheet.tsx",
+			"x": 4560,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "模型路由 · 三档加虚拟模型",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "模型路由 · 三档加虚拟模型"
+			}
+		},
+		{
+			"id": "virtual-model",
+			"file": "frames/virtual-model.tsx",
+			"x": 18240,
+			"y": 0,
+			"width": 1440,
+			"height": 900,
+			"title": "虚拟模型 · 主模型、快模型与回退",
+			"meta": {
+				"width": 1440,
+				"height": 900,
+				"title": "虚拟模型 · 主模型、快模型与回退"
+			}
+		}
+	],
+	"defaultFrameSize": {
+		"width": 1440,
+		"height": 900
+	},
+	"interactionMode": "desktop"
+}
