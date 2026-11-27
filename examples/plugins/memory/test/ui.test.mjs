@@ -70,6 +70,15 @@ async function mount(t, { hidden = false, width = 360 } = {}) {
   window.eval(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
   // 渲染是异步的（status → read → context），固定 40ms 在负载高时会假失败。
   const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
+  /** 固定 120ms 在高负载下会假失败：条件断言改用有界轮询。 */
+  const until = async (predicate, timeoutMs = 3000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await predicate()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return predicate();
+  };
   await settle();
   return {
     window,
@@ -80,6 +89,7 @@ async function mount(t, { hidden = false, width = 360 } = {}) {
     copied,
     injections,
     settle,
+    until,
     dataDir,
     $: (id) => window.document.getElementById(id),
     clickTab: (tab) => window.document.querySelector(`[data-tab="${tab}"]`).click(),
@@ -232,8 +242,7 @@ test('send picker really dispatches to the chosen session and shows confirmed do
   assert.match(f.$('send-list').textContent, /本项目会话/);
   assert.equal(f.$('send-go').disabled, false);
   f.$('send-go').click();
-  await f.settle();
-  assert.equal(f.$('send-dialog').open, false);
+  assert.ok(await f.until(() => !f.$('send-dialog').open), '发送完成后对话框应关闭');
   assert.equal(f.injections.length, 1);
   assert.equal(f.injections[0].sessionId, 'target');
   assert.equal(f.injections[0].sameWorkspace, true);
