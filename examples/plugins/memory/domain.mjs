@@ -1,5 +1,7 @@
 export const KINDS = ['preference', 'fact', 'decision', 'lesson', 'project', 'feedback'];
 export const DAILY_KINDS = ['note', 'summary', 'handoff'];
+/** 待办状态：未开始 / 进行中 / 已完成。`doing` 既表示有人在处理，也用于发到会话之后。 */
+export const TODO_STATUSES = ['todo', 'doing', 'done'];
 export const DEFAULTS = Object.freeze({
   enabled: true,
   autoLearn: false,
@@ -11,6 +13,16 @@ export const DEFAULTS = Object.freeze({
   maxChars: 12000,
 });
 export const LIMITS = { memories: 500, todos: 200, logs: 12000, recovery: 100 };
+/** 待办图片：每张图在渲染层先压缩，单张正文上限由附件层再校验一次。 */
+export const TODO_IMAGE_LIMIT = 6;
+export const IMAGE_MIME_BY_EXT = Object.freeze({
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  avif: 'image/avif',
+});
+export const IMAGE_MIMES = Object.freeze(Object.values(IMAGE_MIME_BY_EXT));
 export const isObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 export const visible = (record, project) =>
@@ -56,6 +68,43 @@ export function boolean(value, fallback) {
   if (value === undefined) return fallback;
   if (typeof value !== 'boolean') throw new Error('参数必须为布尔值');
   return value;
+}
+
+/** 只认文件头，不信渲染层声明的 MIME。 */
+export function imageFormat(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 12) return null;
+  const at = (index, text) =>
+    [...text].every((char, offset) => bytes[index + offset] === char.charCodeAt(0));
+  if (bytes[0] === 0x89 && at(1, 'PNG\r\n')) return 'png';
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg';
+  if (at(0, 'GIF8')) return 'gif';
+  if (at(0, 'RIFF') && at(8, 'WEBP')) return 'webp';
+  if (at(4, 'ftyp') && (at(8, 'avif') || at(8, 'avis'))) return 'avif';
+  return null;
+}
+
+/** 坏元数据不会让整条待办消失：只丢掉解释不了的图片引用。 */
+export function sanitizeImages(value) {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set();
+  const images = [];
+  for (const item of value) {
+    if (images.length >= TODO_IMAGE_LIMIT) break;
+    if (
+      !isObject(item) ||
+      typeof item.id !== 'string' ||
+      !/^[a-z0-9-]{1,80}$/.test(item.id) ||
+      ids.has(item.id) ||
+      !IMAGE_MIMES.includes(item.mime) ||
+      !Number.isSafeInteger(item.bytes) ||
+      item.bytes < 1 ||
+      item.bytes > 8 * 1024 * 1024
+    )
+      continue;
+    ids.add(item.id);
+    images.push({ id: item.id, mime: item.mime, bytes: item.bytes });
+  }
+  return images;
 }
 
 export function localDate(now = Date.now()) {
@@ -193,10 +242,19 @@ export function validateState(state) {
       throw new Error('记忆记录内容无效');
     if (type === 'memories' && (!KINDS.includes(row.kind) || typeof row.pinned !== 'boolean'))
       throw new Error('记忆类型无效');
-    if (type === 'todos' && typeof row.done !== 'boolean') throw new Error('待办记录无效');
+    if (type === 'todos' && row.status !== undefined && !TODO_STATUSES.includes(row.status))
+      throw new Error('待办状态无效');
     if (type === 'logs') {
       validDate(row.date);
       if (!DAILY_KINDS.includes(row.kind)) throw new Error('日志类型无效');
+    }
+    if (type === 'todos') {
+      // 旧文件只有布尔 done：读进来就迁移，之后只认 status，避免两份状态互相漂移。
+      if (row.status === undefined) row.status = row.done === true ? 'done' : 'todo';
+      delete row.done;
+      const images = sanitizeImages(row.images);
+      if (images.length) row.images = images;
+      else delete row.images;
     }
     return !looksSensitive(text);
   };
@@ -281,8 +339,8 @@ export function contextSections(state, project, query = '', now = Date.now()) {
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || newest(a, b));
   const logs = state.logs.filter((row) => visible(row, project) && !looksSensitive(row.text));
   const todos = state.todos
-    .filter((row) => visible(row, project) && !row.done && !looksSensitive(row.text))
-    .sort(newest);
+    .filter((row) => visible(row, project) && row.status !== 'done' && !looksSensitive(row.text))
+    .sort((a, b) => Number(b.status === 'doing') - Number(a.status === 'doing') || newest(a, b));
   const selected = memories.slice(0, settings.maxMemories);
   const related =
     settings.mode === 'per-turn'
@@ -323,6 +381,8 @@ export function contextSections(state, project, query = '', now = Date.now()) {
     kind: row.kind,
     scope: row.scope,
     text: row.content ?? row.text,
+    ...(row.status === 'doing' ? { doing: true } : {}),
+    ...(Array.isArray(row.images) && row.images.length ? { images: row.images.length } : {}),
   });
   if (settings.includeTodos)
     append('todos', '待办', todos.map(compact), Math.min(2000, settings.maxChars * 0.2));

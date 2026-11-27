@@ -61,6 +61,15 @@
       border-radius: var(--card-radius); color: var(--fg); font-size: calc(13rem / 14); }
     .scope:hover { background: var(--raise); }
     .scope svg { width: 16px; height: 16px; color: var(--dim); }
+    #project-label { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #project-choices { display: grid; gap: 4px; max-height: 360px; overflow: auto; margin-top: 14px; }
+    .project-choice { padding: 10px 12px; border-radius: var(--card-radius); text-align: left; }
+    .project-choice:hover, .project-choice[aria-pressed="true"] { background: var(--raise); }
+    .send__list { margin-top: 14px; display: grid; gap: 4px; max-height: 220px; overflow: auto; }
+    .send__choice { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: var(--card-radius); cursor: pointer; }
+    .send__choice:hover { background: var(--raise); }
+    .send__choice input { accent-color: var(--action); }
+    .send__choice small { color: var(--dim); margin-left: auto; }
     .scope__more { color: var(--faint); font-size: calc(12rem / 14); }
     .scope__chevron { width: 14px; height: 14px; color: var(--faint); }
     .counts { color: var(--faint); font-size: calc(11rem / 14); font-variant-numeric: tabular-nums; }
@@ -142,7 +151,10 @@
 
     .check { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
       border: 1px solid color-mix(in srgb, var(--dim) 55%, transparent); border-radius: 3px; flex: none; }
-    .check[data-on="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+    .check[data-status="done"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+    .check[data-status="doing"] { border-color: var(--action); }
+    .check[data-status="doing"]::after { content: ""; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--action); }
     .check svg { width: 12px; height: 12px; }
     .todo { display: flex; align-items: flex-start; gap: 12px; border-top: 1px solid var(--line-soft); padding: 12px 0; }
     .todo:first-child { border-top: 0; }
@@ -150,6 +162,33 @@
     .todo__text { font-size: calc(13rem / 14); line-height: 1.7; overflow-wrap: anywhere; }
     .todo__meta { margin-top: 4px; display: flex; gap: 6px; color: var(--faint); font-size: calc(11rem / 14); }
     .todo--done .todo__text { color: var(--faint); text-decoration: line-through; }
+    .todo__flag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px;
+      background: color-mix(in srgb, var(--action) 14%, transparent); color: var(--action);
+      font-size: calc(10.5rem / 14); }
+    /* ── 待办图片：列表里的缩略图 + 编辑器里的图片条 ─────────────── */
+    .todo__shots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .shot { position: relative; display: inline-flex; align-items: center; justify-content: center;
+      width: 64px; height: 64px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--raise); color: var(--faint); }
+    .shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .todo button.shot { cursor: zoom-in; }
+    .todo button.shot:hover { border-color: var(--dim); }
+    .shot img[data-wait] { opacity: 0; }
+    .shot--loading::after { content: ""; width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid color-mix(in srgb, var(--dim) 40%, transparent); border-top-color: var(--dim);
+      animation: spin .8s linear infinite; }
+    .shot__remove { position: absolute; top: 3px; right: 3px; display: inline-flex; align-items: center;
+      justify-content: center; width: 18px; height: 18px; border-radius: 999px; color: #fff;
+      background: color-mix(in srgb, #000 62%, transparent); }
+    .shot__remove:hover { background: color-mix(in srgb, #000 78%, transparent); }
+    .shot__remove svg { width: 12px; height: 12px; }
+    .shot--add { border-style: dashed; }
+    .shot--add:hover { color: var(--fg); border-color: var(--dim); }
+    .editor__shots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; padding: 6px;
+      border: 1px dashed transparent; border-radius: 8px; }
+    .editor__shots[data-over="true"] { border-color: var(--mark);
+      background: color-mix(in srgb, var(--mark) 8%, transparent); }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .group { display: flex; align-items: center; gap: 8px; margin-top: 22px; padding-top: 14px;
       border-top: 1px solid var(--line); color: var(--dim); font-size: calc(12rem / 14); }
     .group button { margin-left: auto; color: var(--dim); font-size: calc(12rem / 14); }
@@ -326,7 +365,12 @@
     .dialog__foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 20px; }
     .dialog__error { margin-top: 12px; color: var(--danger); font-size: calc(12rem / 14); }
     .dialog__error:empty { display: none; }
-
+    #viewer { width: fit-content; max-width: calc(100% - 32px); max-height: calc(100% - 32px);
+      padding: 0; border: 0; background: none; overflow: visible; }
+    #viewer::backdrop { background: color-mix(in srgb, #000 62%, transparent); }
+    #viewer img { display: block; max-width: calc(100vw - 96px); max-height: calc(100vh - 96px);
+      object-fit: contain; border-radius: calc(var(--card-radius) + 2px); background: var(--surface);
+      box-shadow: 0 18px 60px color-mix(in srgb, #000 45%, transparent); }
     /* 和宿主一致：控件聚焦是「边框染色 + 一圈很淡的 ring」，不是粗橙描边。 */
     :focus-visible { outline: 2px solid var(--ring, var(--mark)); outline-offset: 1px; }
     input:focus-visible, select:focus-visible, textarea:focus-visible {
@@ -354,12 +398,13 @@
 <body>
   <div class="shell">
     <header class="topbar">
-      <button class="scope" id="scope" type="button" title="切换记忆范围">
+      <button class="scope" id="project-control" type="button" aria-haspopup="dialog" title="切换记忆项目">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-        <span id="project">全局</span>
-        <span class="scope__more">＋ 全局</span>
+        <span id="project-label">全局记忆</span>
+        <span class="scope__more" id="project-global">＋ 全局</span>
         <svg aria-hidden="true" class="scope__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       </button>
+      <select id="project-switch" aria-label="记忆项目" hidden><option value="global">全局记忆</option></select>
       <span class="counts" id="counts"></span>
       <div class="topbar__end">
         <label class="search" id="search-field">
@@ -393,9 +438,9 @@
         <section id="browser">
           <div class="filters">
             <label class="filter" id="kind-field"><select id="kind" aria-label="记忆类型"><option value="">全部类型</option><option value="preference">偏好</option><option value="fact">事实</option><option value="decision">决定</option><option value="lesson">经验</option><option value="project">项目约定</option><option value="feedback">反馈</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
-            <label class="filter" id="scope-field"><select id="scope" aria-label="记忆范围"><option value="">全部范围</option><option value="project">当前项目</option><option value="global">全局</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
+            <label class="filter" id="scope-field"><select id="scope-filter" aria-label="记忆范围"><option value="">全部范围</option><option value="project">当前项目</option><option value="global">全局</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
             <label class="filter" id="date-field" hidden><input id="date" type="date" aria-label="日志日期" /></label>
-            <label class="filter" id="todo-field"><select id="todo-filter" aria-label="待办状态"><option value="all">全部状态</option><option value="open">未完成</option><option value="done">已完成</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
+            <label class="filter" id="todo-field"><select id="todo-filter" aria-label="待办状态"><option value="all">全部状态</option><option value="todo">未开始</option><option value="doing">进行中</option><option value="done">已完成</option></select><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></label>
             <div class="week" id="week"></div>
             <span class="filters__end" id="sort-label">按更新时间倒序</span>
           </div>
@@ -570,6 +615,12 @@
         <textarea id="edit-content" maxlength="2000" required></textarea>
         <div class="field__foot"><span>不要保存密码、密钥或令牌</span><span class="mono" id="char-count">0 / 2000</span></div>
       </div>
+      <div class="field" id="shots-field" hidden>
+        <label>图片</label>
+        <div class="editor__shots" id="shots"></div>
+        <p class="field__foot"><span>粘贴、拖入或点＋选图 · 平时只存本机，发到会话时随单发送</span><span class="mono" id="shots-count"></span></p>
+        <input id="shot-input" type="file" accept="image/*" multiple hidden />
+      </div>
       <div class="dialog__row" id="pin-field">
         <label class="dialog__toggle" for="edit-pinned">
           <span class="switch"><input id="edit-pinned" type="checkbox" /><span class="switch__track"></span></span>
@@ -594,6 +645,43 @@
     </div>
   </dialog>
 
+  <dialog id="viewer" aria-label="图片预览">
+    <img id="viewer-img" alt="" />
+  </dialog>
+
+  <dialog id="project-dialog" aria-labelledby="project-title">
+    <h2 id="project-title">选择记忆项目</h2>
+    <p class="dialog__lead">只切换查看和编辑范围，不移动原记录，不改变聊天会话。</p>
+    <div id="project-choices"></div>
+    <div class="dialog__foot"><button class="btn" type="button" id="project-close">取消</button></div>
+  </dialog>
+
+  <dialog id="send-dialog" aria-labelledby="send-title">
+    <div class="dialog__head">
+      <div>
+        <h2 id="send-title">发到会话</h2>
+        <p class="dialog__lead" id="send-lead"></p>
+      </div>
+      <button class="btn btn--icon" type="button" id="send-close" aria-label="关闭">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div id="send-list" class="send__list" role="radiogroup" aria-label="接收待办的会话"></div>
+    <div class="field">
+      <label for="send-note">交给它的说法（可改，默认是待办正文）</label>
+      <textarea id="send-note" maxlength="2000"></textarea>
+      <p class="field__foot"><span>会附上待办 ID 与完成后勾选 / 改写的指令</span><span class="mono" id="send-count"></span></p>
+    </div>
+    <p class="hint">正文、图片和待办 ID 一起发送；确认接收后标为进行中，Agent 完成后可勾选或修改正文。</p>
+    <label class="dialog__toggle" id="send-steer-field" hidden><input type="checkbox" id="send-steer" />插入当前回合（不选则排队执行）</label>
+    <p class="dialog__error" id="send-error" role="alert"></p>
+    <div class="dialog__foot">
+      <button class="btn" type="button" id="send-cancel">取消</button>
+      <button class="btn" type="button" id="send-copy">仅复制指令</button>
+      <button class="btn btn--primary" type="button" id="send-go">发送到会话</button>
+    </div>
+  </dialog>
+
   <script>
     const $ = (id) => document.getElementById(id);
     const labels = { preference:'偏好', fact:'事实', decision:'决定', lesson:'经验', project:'项目约定', feedback:'反馈', note:'记录', summary:'会话总结', handoff:'压缩交接' };
@@ -609,6 +697,10 @@
       pause:'<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
       play:'<path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/>',
       search:'<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+      plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+      close:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+      copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+      send:'<path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="m22 2-11 11"/>',
       chevronLeft:'<path d="m15 18-6-6 6-6"/>',
       chevronRight:'<path d="m9 18 6-6-6-6"/>',
       chevronDown:'<path d="m6 9 6 6 6-6"/>'
@@ -635,6 +727,26 @@
     const history = [];
     const railTabs = ['memory', 'daily', 'todos'];
     const call = (name, args = {}) => window.enso.call(name, args);
+    let projectChoices = [], projectSelection = 'global', projectsLoaded = false, switchingProject = false;
+    async function loadProjects() {
+      if (projectsLoaded) return;
+      if (!window.enso.projects) {
+        $('project-switch').disabled = true;
+        $('project-control').disabled = true;
+        $('project-control').title = '切换项目需要更新 CodeKiln 宿主';
+        projectsLoaded = true; return;
+      }
+      const result = await window.enso.projects.list();
+      projectChoices = result.projects ?? [];
+      projectSelection = projectChoices.find((item) => JSON.stringify(item.context) === JSON.stringify(result.current))?.key ?? 'global';
+      const global = element('option', '全局记忆'); global.value = 'global';
+      $('project-switch').replaceChildren(global, ...projectChoices.map((item) => {
+        const option = element('option', item.name); option.value = item.key; return option;
+      }));
+      $('project-switch').value = projectSelection;
+      $('project-label').textContent = $('project-switch').selectedOptions[0]?.textContent ?? '全局记忆';
+      projectsLoaded = true;
+    }
     const today = new Date();
     const iso = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
     $('date').value = iso(today);
@@ -650,8 +762,231 @@
       return node;
     }
 
+    /* ── 待办图片 ─────────────────────────────────────────────────
+     * 沙箱视图的 CSP 只放行 data:/blob:，图不能走 local-image://；
+     * 所以渲染层压图后以 base64 交给插件，待办记录里只留图片 ID。
+     * 列表要缩略图（一次批量取，单次响应受宿主 1MB 限制），大图按需取一张。 */
+    const MAX_SHOTS = 6;
+    const shotCache = new Map(), fullCache = new Map(), shotWaiters = new Map(), shotTries = new Map();
+    let editImages = [], shotQueue = [], shotTimer = 0;
+
+    function bytesToBase64(bytes) {
+      let text = '';
+      for (let index = 0; index < bytes.length; index += 0x8000)
+        text += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      return btoa(text);
+    }
+    const imageUrl = (mime, base64) => `data:${mime};base64,${base64}`;
+
+    async function encodeShot(bitmap, edge, quality) {
+      const scale = Math.min(1, edge / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return await new Promise((resolve) => { canvas.toBlob(resolve, 'image/webp', quality); });
+    }
+    /** 宿主单次 UI 调用限 1MB，base64 还要膨胀 4/3：先压到 420KB，再配一张 360px 缩略图。 */
+    async function prepareShot(file) {
+      const bitmap = await createImageBitmap(file);
+      try {
+        let full = null;
+        for (const [edge, quality] of [[1400, .82], [1100, .72], [900, .66], [700, .6]]) {
+          full = await encodeShot(bitmap, edge, quality);
+          if (!full) throw new Error('读不出这张图片，请换一张');
+          if (full.size <= 420 * 1024) break;
+        }
+        if (full.size > 600 * 1024) throw new Error('图片太大，压缩后仍超过 600KB');
+        return { full, thumb: (await encodeShot(bitmap, 360, .7)) ?? full };
+      } finally { bitmap.close?.(); }
+    }
+    function paintShots() {
+      const nodes = editImages.map((shot, index) => {
+        const tile = element('div', undefined, `shot shot--edit${shot.state === 'loading' ? ' shot--loading' : ''}`);
+        if (shot.url) { const img = element('img'); img.src = shot.url; img.alt = ''; tile.append(img); }
+        tile.append(iconButton('close', '移除图片', () => { editImages.splice(index, 1); paintShots(); }, { class: 'shot__remove' }));
+        return tile;
+      });
+      if (editImages.length < MAX_SHOTS) {
+        const add = button('', () => $('shot-input').click(), 'shot shot--add');
+        add.innerHTML = svg('plus', 18);
+        add.title = '添加图片（也可粘贴或拖入）';
+        add.setAttribute('aria-label', '添加图片');
+        nodes.push(add);
+      }
+      $('shots').replaceChildren(...nodes);
+      $('shots-count').textContent = editImages.length ? `${editImages.length} / ${MAX_SHOTS}` : '';
+    }
+    function scheduleShots() {
+      clearTimeout(shotTimer);
+      shotTimer = setTimeout(() => { void flushShots(); }, 40);
+    }
+    function queueShots(ids) {
+      for (const id of ids) if (!shotCache.has(id) && !shotQueue.includes(id)) shotQueue.push(id);
+      scheduleShots();
+    }
+    async function flushShots() {
+      const ids = shotQueue.filter((id) => !shotCache.has(id)).slice(0, MAX_SHOTS);
+      shotQueue = shotQueue.filter((id) => !ids.includes(id));
+      if (!ids.length) return;
+      try {
+        const result = await call('attachment', { ids });
+        for (const item of result.items ?? []) {
+          shotCache.set(item.id, item.dataUrl);
+          for (const img of shotWaiters.get(item.id) ?? []) { img.src = item.dataUrl; delete img.dataset.wait; }
+          shotWaiters.delete(item.id);
+        }
+        // 单次响应有字节预算：排在后面的图再问一次，而不是永远空着。
+        const dead = new Set();
+        for (const id of result.missing ?? []) {
+          const tries = (shotTries.get(id) ?? 0) + 1;
+          shotTries.set(id, tries);
+          if (tries < 3) {
+            shotQueue.push(id);
+            continue;
+          }
+          for (const img of shotWaiters.get(id) ?? []) { delete img.dataset.wait; img.dataset.failed = 'true'; }
+          shotWaiters.delete(id);
+          dead.add(id);
+        }
+        // 文件已经不存在（被清理/换机器）：编辑器里也去掉，避免保存时引用一张死图。
+        if (dead.size && edit?.target === 'todos') {
+          editImages = editImages.filter((shot) => !dead.has(shot.id));
+          paintShots();
+        }
+        let changed = false;
+        for (const shot of editImages) {
+          const cached = shot.id ? shotCache.get(shot.id) : null;
+          if (cached && shot.url !== cached) { shot.url = cached; shot.state = 'ready'; changed = true; }
+        }
+        if (changed) paintShots();
+      } catch (error) { notice(error.message ?? String(error), true); }
+      if (shotQueue.length) scheduleShots();
+    }
+    function attachShot(img, id) {
+      const cached = shotCache.get(id);
+      if (cached) { img.src = cached; return; }
+      img.dataset.wait = 'true';
+      if (!shotWaiters.has(id)) shotWaiters.set(id, new Set());
+      shotWaiters.get(id).add(img);
+      queueShots([id]);
+    }
+    async function addShotFiles(files) {
+      if (edit?.target !== 'todos') return;
+      const picked = [...files].filter((file) => file && typeof file.type === 'string' && file.type.startsWith('image/'));
+      if (!picked.length) { notice('只支持图片文件', true); return; }
+      for (const file of picked) {
+        if (editImages.length >= MAX_SHOTS) { notice(`每条待办最多 ${MAX_SHOTS} 张图片`, true); break; }
+        const shot = { state: 'loading', url: '' };
+        editImages.push(shot); paintShots();
+        try {
+          const { full, thumb } = await prepareShot(file);
+          const data = bytesToBase64(new Uint8Array(await full.arrayBuffer()));
+          const preview = bytesToBase64(new Uint8Array(await thumb.arrayBuffer()));
+          const saved = await call('attachment_save', { data, thumb: preview });
+          shot.id = saved.id; shot.state = 'ready'; shot.url = imageUrl(saved.mime ?? 'image/webp', data);
+          shotCache.set(saved.id, imageUrl(saved.mime ?? 'image/webp', preview));
+        } catch (error) {
+          editImages = editImages.filter((item) => item !== shot);
+          notice(error.message ?? String(error), true);
+        }
+        paintShots();
+      }
+    }
+    async function openViewer(id) {
+      const img = $('viewer-img');
+      img.src = fullCache.get(id) ?? shotCache.get(id) ?? '';
+      $('viewer').showModal();
+      if (fullCache.has(id)) return;
+      try {
+        const result = await call('attachment', { ids: [id], full: true });
+        const item = result.items?.[0];
+        if (!item) return;
+        fullCache.set(id, item.dataUrl);
+        if ($('viewer').open) img.src = item.dataUrl;
+      } catch (error) { notice(error.message ?? String(error), true); }
+    }
+
+    /* Worker ACK is acceptance, not completion. Only an explicit tool update completes work. */
+    let sendRow = null, sendSessions = [], sendRequest = '', sendBusy = false, sendVersion = 0;
+
+    function paintSendTarget() {
+      const selected = $('send-list').querySelector('input:checked')?.value;
+      const target = sendSessions.find((item) => item.id === selected);
+      $('send-steer-field').hidden = target?.state !== 'running';
+      if ($('send-steer-field').hidden) $('send-steer').checked = false;
+      $('send-go').disabled = !target || (sendRow?.images?.length ?? 0) > 4 || sendBusy;
+    }
+
+    async function openSend(row) {
+      if (switchingProject) { notice('正在切换项目，请稍候再操作。', true); return; }
+      sendRow = row;
+      const version = ++sendVersion;
+      sendRequest = crypto.randomUUID(); sendSessions = [];
+      $('send-error').textContent = '';
+      $('send-lead').textContent = `${projectName(status?.project)} · ${row.images?.length ?? 0} 张图片`;
+      $('send-note').value = row.text ?? row.content ?? '';
+      $('send-count').textContent = `${$('send-note').value.length} / 2000`;
+      $('send-go').disabled = true;
+      $('send-list').replaceChildren(element('p', '正在读取本工作区会话…', 'hint'));
+      $('send-steer').checked = false; $('send-steer-field').hidden = true;
+      if ((row.images?.length ?? 0) > 4) $('send-error').textContent = '单次最多发送 4 张图，请拆分待办后发送；原图片全部保留。';
+      $('send-dialog').showModal();
+      $('send-note').focus();
+      try {
+        const result = await call('sessions');
+        if (version !== sendVersion || !$('send-dialog').open) return;
+        sendSessions = result.sessions ?? [];
+        if (!sendSessions.length) {
+          $('send-list').replaceChildren(element('p', result.error === 'select-project' ? '请先在顶部选择本地项目，再选择会话。' : '本工作区还没有可用会话，请先在 Code 中创建。', 'hint'));
+          return;
+        }
+        const selected = sendSessions.find((item) => item.id === result.current)?.id ?? sendSessions[0].id;
+        $('send-list').replaceChildren(...sendSessions.map((session) => {
+          const label = element('label', undefined, 'send__choice');
+          const radio = element('input'); radio.type = 'radio'; radio.name = 'send-target'; radio.value = session.id; radio.checked = session.id === selected;
+          label.append(radio, element('span', session.title || '未命名会话'), element('small', ({ running:'运行中', waiting:'等待确认', error:'出错', idle:'空闲' })[session.state] ?? '空闲'));
+          return label;
+        }));
+        paintSendTarget();
+      } catch (error) { if (version === sendVersion) $('send-error').textContent = error.message ?? String(error); }
+    }
+    $('send-note').oninput = () => { $('send-count').textContent = `${$('send-note').value.length} / 2000`; };
+    $('send-close').onclick = () => $('send-dialog').close();
+    $('send-cancel').onclick = () => $('send-dialog').close();
+    $('send-dialog').addEventListener('cancel', (event) => { if (sendBusy) event.preventDefault(); });
+    $('send-list').onchange = paintSendTarget;
+    $('send-copy').onclick = async () => {
+      if (!sendRow) return;
+      $('send-go').disabled = true; $('send-error').textContent = '';
+      try {
+        const result = await call('copy_todo', { id: sendRow.id, note: $('send-note').value });
+        $('send-dialog').close();
+        notice(`指令已复制，待办状态未改变${result.images ? '；图片需另行附上。' : '。'}`);
+      } catch (error) { $('send-error').textContent = error.message ?? String(error); }
+      finally { paintSendTarget(); }
+    };
+    $('send-go').onclick = async () => {
+      const sessionId = $('send-list').querySelector('input:checked')?.value;
+      if (!sendRow || !sessionId || sendBusy || $('send-go').disabled) return;
+      sendBusy = true; busy = true;
+      for (const id of ['send-go','send-copy','send-close','send-cancel']) $(id).disabled = true;
+      $('send-error').textContent = '';
+      try {
+        const result = await call('send_todo', { id: sendRow.id, sessionId, deliveryId: sendRequest, note: $('send-note').value, deliverAs: $('send-steer').checked ? 'steer' : 'followUp' });
+        $('send-dialog').close(); notice(`目标会话已确认接收${result.images ? `（${result.images} 张图）` : ''}；${result.status === 'doing' ? '待办已标为进行中。' : '保留待办的最新状态。'}`);
+        lastStatusAt = 0; offset = 0; history.length = 0; await load();
+      } catch (error) {
+        $('send-error').textContent = `${error.message ?? String(error)}。未确认成功的请求不会自动重发，请检查目标会话后重试。`;
+      } finally {
+        sendBusy = false; busy = false;
+        for (const id of ['send-copy','send-close','send-cancel']) $(id).disabled = false;
+        paintSendTarget();
+      }
+    };
+
     async function action(work, message = '已保存') {
-      if (busy) return;
+      if (busy || switchingProject) return;
       busy = true; document.body.setAttribute('aria-busy', 'true');
       try { const result = await work(); lastStatusAt = 0; notice(typeof message === 'function' ? message(result) : message); await load(); return result; }
       catch (error) { notice(error.message ?? String(error), true); }
@@ -664,6 +999,7 @@
     $('confirm-no').onclick = () => $('confirm-dialog').close();
 
     function openEditor(target, record = null) {
+      if (switchingProject) { notice('正在切换项目，请稍候再编辑。', true); return; }
       edit = { target, record }; $('editor-error').textContent = '';
       $('editor-title').textContent = `${record ? '编辑' : '新增'}${target === 'daily' ? '日志' : target === 'todos' ? '待办' : '记忆'}`;
       $('editor-lead').textContent = `${record ? '修改后将替换原记录' : '会存进'} · ${projectName(status?.project)}`;
@@ -678,6 +1014,12 @@
       $('pin-field').hidden = target !== 'memory'; $('edit-pinned').checked = record?.pinned ?? false;
       $('edit-content').value = record?.content ?? record?.text ?? '';
       $('char-count').textContent = `${$('edit-content').value.length} / 2000`;
+      // 图片只挂在待办上；缩略图先占位，打开时批量取一次。
+      const images = target === 'todos' && Array.isArray(record?.images) ? record.images : [];
+      editImages = images.map((image) => ({ id: image.id, url: shotCache.get(image.id) ?? '', state: shotCache.has(image.id) ? 'ready' : 'loading' }));
+      $('shots-field').hidden = target !== 'todos';
+      paintShots();
+      if (editImages.length) queueShots(editImages.map((shot) => shot.id));
       paintEditorBudget();
       $('save-edit').disabled = false;
       $('editor').showModal(); $('edit-content').focus();
@@ -699,11 +1041,17 @@
     // 宿主以 sandbox="allow-scripts"（无 allow-forms）挂载插件，原生表单提交会被浏览器拦掉，
     // 保存必须由按钮直接调用，不能依赖 submit 事件。
     async function submitEditor() {
+      if (switchingProject) return;
       if ($('save-edit').disabled) return; $('save-edit').disabled = true;
       const args = { content: $('edit-content').value, scope: $('edit-scope').value };
       if (edit.record) args.id = edit.record.id;
       try {
-        if (edit.target === 'todos') await call('scratchpad', { action: edit.record ? 'edit' : 'add', text: args.content, scope: args.scope, ...(args.id ? { id:args.id } : {}) });
+        if (edit.target === 'todos') {
+          // 已有图片可能还在取缩略图，但 ID 已经可保存；只有还没上传完的才拦下来。
+          if (editImages.some((shot) => !shot.id)) throw new Error('还有图片在上传，请稍候再保存');
+          const images = editImages.map((shot) => shot.id);
+          await call('scratchpad', { action: edit.record ? 'edit' : 'add', text: args.content, scope: args.scope, images, ...(args.id ? { id:args.id } : {}) });
+        }
         else await call('save', { ...args, target: edit.target === 'daily' ? 'daily' : 'long_term', kind:$('edit-kind').value, ...(edit.target === 'memory' ? { pinned:$('edit-pinned').checked } : {}) });
         $('editor').close(); notice('已保存'); lastStatusAt = 0; offset = 0; history.length = 0; await load();
       } catch (error) { $('editor-error').textContent = error.message; }
@@ -714,6 +1062,32 @@
     $('edit-content').onkeydown = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); void submitEditor(); }
     };
+    // 宿主以 sandbox="allow-scripts" 挂载视图：没有剪贴板读取权限，
+    // 但粘贴事件里的图片文件、拖入的文件和 file input 都还能用。
+    $('shot-input').onchange = (event) => {
+      const files = [...(event.target.files ?? [])];
+      event.target.value = '';
+      void addShotFiles(files);
+    };
+    $('editor').addEventListener('paste', (event) => {
+      if (edit?.target !== 'todos') return;
+      const items = [...(event.clipboardData?.items ?? [])].filter((item) => item.kind === 'file' && item.type?.startsWith('image/'));
+      const files = items.map((item) => item.getAsFile()).filter(Boolean);
+      if (!files.length) return;
+      event.preventDefault();
+      void addShotFiles(files);
+    });
+    $('shots-field').addEventListener('dragover', (event) => {
+      if (edit?.target !== 'todos') return;
+      event.preventDefault(); $('shots-field').dataset.over = 'true';
+    });
+    $('shots-field').addEventListener('dragleave', () => { delete $('shots-field').dataset.over; });
+    $('shots-field').addEventListener('drop', (event) => {
+      if (edit?.target !== 'todos') return;
+      event.preventDefault(); delete $('shots-field').dataset.over;
+      void addShotFiles([...(event.dataTransfer?.files ?? [])]);
+    });
+    $('viewer').onclick = (event) => { if (event.target === $('viewer')) $('viewer').close(); };
 
     function deleteRecord(row, source) {
       return () => confirmAction('此条将移到最近删除，可恢复。确定删除？', () => call('forget', { ids:[row.id], target:source === 'daily' ? 'daily' : source === 'todos' ? 'scratchpad' : 'long_term' }));
@@ -743,17 +1117,45 @@
       return item;
     }
     function renderTodo(row, source) {
-      const item = element('article', undefined, `todo${row.done ? ' todo--done' : ''}`);
+      const status = row.status === 'doing' ? 'doing' : row.status === 'done' ? 'done' : 'todo';
+      const item = element('article', undefined, `todo${status === 'done' ? ' todo--done' : ''}`);
       const check = element('span', undefined, 'check');
-      check.dataset.on = String(!!row.done);
-      if (row.done) check.innerHTML = svg('check', 12);
+      check.dataset.status = status;
+      if (status === 'done') check.innerHTML = svg('check', 12);
       const main = element('div', undefined, 'todo__main');
       main.append(element('p', row.text ?? row.content, 'todo__text'));
+      const images = Array.isArray(row.images) ? row.images : [];
+      if (images.length) {
+        const strip = element('div', undefined, 'todo__shots');
+        for (const image of images) {
+          const tile = button('', () => { void openViewer(image.id); }, 'shot');
+          tile.title = '查看大图';
+          tile.setAttribute('aria-label', '查看大图');
+          const img = element('img'); img.alt = ''; img.decoding = 'async';
+          attachShot(img, image.id);
+          tile.append(img);
+          strip.append(tile);
+        }
+        main.append(strip);
+      }
       const meta = element('div', undefined, 'todo__meta');
-      meta.append(element('span', row.scope === 'global' ? '全局' : '当前项目'), element('span', when(row.updatedAt)));
+      meta.append(element('span', row.scope === 'global' ? '全局' : '当前项目'));
+      if (status === 'doing') meta.append(element('span', '进行中', 'todo__flag'));
+      meta.append(element('span', when(row.updatedAt)));
       main.append(meta);
       const actions = element('div', undefined, 'actions');
-      actions.append(iconButton(row.done ? 'undo' : 'check', row.done ? '标为未完成' : '完成', () => action(() => call('scratchpad', { action:row.done ? 'undo' : 'done', id:row.id }))));
+      actions.append(iconButton('send', '发到会话', () => { void openSend(row); }));
+      if (status !== 'done')
+        actions.append(
+          iconButton(status === 'doing' ? 'pause' : 'play', status === 'doing' ? '暂停，退回未开始' : '开始，标为进行中', () =>
+            action(() => call('scratchpad', { action: status === 'doing' ? 'undo' : 'start', id: row.id }))
+          )
+        );
+      actions.append(
+        iconButton(status === 'done' ? 'undo' : 'check', status === 'done' ? '撤销完成' : '完成', () =>
+          action(() => call('scratchpad', { action: status === 'done' ? 'undo' : 'done', id: row.id }))
+        )
+      );
       actions.append(iconButton('pencil', '编辑', () => openEditor(source, row)));
       actions.append(iconButton('trash', '删除', deleteRecord(row, source), { 'data-danger': '' }));
       item.append(check, main, actions);
@@ -876,13 +1278,16 @@
     async function load() {
       const request = ++sequence;
       try {
+        await loadProjects();
+        if (request !== sequence) return;
         const latest = status && Date.now()-lastStatusAt < 1000 ? status : await call('status');
         if (request !== sequence) return; status = latest; lastStatusAt = Date.now(); dirty = false;
         const settingsTab = tab === 'settings';
         const paused = !status.enabled && tab !== 'trash' && tab !== 'settings';
-        $('project').textContent = projectName(status.project);
-        $('scope').title = status.project ?? '当前无项目，仅显示全局记忆';
-        $('counts').textContent = `${status.memories} 条记忆 · ${status.logs} 篇日志 · ${status.todos} 项待办`;
+        $('project-global').hidden = !status.project;
+        if (!window.enso.projects) $('project-label').textContent = projectName(status.project);
+        if (window.enso.projects) $('project-control').title = status.project ?? '全局记忆';
+        $('counts').textContent = `${status.memories} 条记忆 · ${status.logs} 篇日志 · ${status.todos} 项待办${status.doing ? `（${status.doing} 进行中）` : ''}`;
         paintTabs();
         $('settings-panel').hidden = !settingsTab; $('paused-panel').hidden = !paused;
         $('browser').hidden = settingsTab || paused;
@@ -921,21 +1326,24 @@
         }
         else result = await call('read', { target: tab === 'todos' ? 'scratchpad' : 'long_term', offset, limit:6,
           ...(tab === 'memory' && $('kind').value ? { kind:$('kind').value } : {}),
-          ...(tab === 'todos' && $('todo-filter').value !== 'all' ? { done:$('todo-filter').value === 'done' } : {}),
-          ...(['memory','todos'].includes(tab) && $('scope').value ? { scope:$('scope').value } : {}) });
+          ...(tab === 'todos' && $('todo-filter').value !== 'all' ? { status:$('todo-filter').value } : {}),
+          ...(['memory','todos'].includes(tab) && $('scope-filter').value ? { scope:$('scope-filter').value } : {}) });
         if (request !== sequence) return;
         nextOffset = result.nextOffset;
         const rows = result.items ?? result.results ?? [];
-        const filtered = tab === 'todos' && !searching ? rows.filter((row) => $('todo-filter').value === 'all' || row.done === ($('todo-filter').value === 'done')) : rows;
+        const filtered = tab === 'todos' && !searching ? rows.filter((row) => $('todo-filter').value === 'all' || (row.status ?? 'todo') === $('todo-filter').value) : rows;
         let nodes;
         if (tab === 'todos' && !searching) {
-          // Open work first; the completed tail is a group, not a mixed-in row.
-          const ordered = [...filtered].sort((a, b) => Number(!!a.done) - Number(!!b.done) || new Date(b.updatedAt) - new Date(a.updatedAt));
+          // 进行中在最前：这部分正在被会话处理，是最该一眼看到的。
+          const rank = { doing: 0, todo: 1, done: 2 };
+          const ordered = [...filtered].sort((a, b) => (rank[a.status] ?? 1) - (rank[b.status] ?? 1) || new Date(b.updatedAt) - new Date(a.updatedAt));
+          const grouped = $('todo-filter').value === 'all';
           nodes = [];
-          let groupAdded = false;
-          for (const row of ordered) {
-            if (row.done && !groupAdded) { groupAdded = true; nodes.push(todoGroup(ordered.filter((entry) => entry.done).length)); }
-            nodes.push(renderTodo(row, 'todos'));
+          for (const [key, label] of [['doing','进行中'],['todo','未开始'],['done','已完成']]) {
+            const bucket = ordered.filter((row) => (row.status ?? 'todo') === key);
+            if (!bucket.length) continue;
+            if (grouped) nodes.push(todoGroup(label, bucket.length));
+            for (const row of bucket) nodes.push(renderTodo(row, 'todos'));
           }
         } else {
           nodes = filtered.map((row) => {
@@ -973,9 +1381,9 @@
       empty.append(element('strong', title), element('p', body));
       return empty;
     }
-    function todoGroup(done) {
+    function todoGroup(label, count) {
       const group = element('div', undefined, 'group');
-      group.append(element('span', '已完成'), element('span', done, 'tab__count'));
+      group.append(element('span', label), element('span', count, 'tab__count'));
       return group;
     }
     function composer() {
@@ -1003,7 +1411,44 @@
       if (destination < 0) return; event.preventDefault(); buttons[destination].focus(); buttons[destination].click();
     };
     $('search').oninput = () => { clearTimeout(debounce); debounce = setTimeout(reset, 220); };
-    for (const id of ['kind','scope','date','todo-filter']) $(id).onchange = () => { if (id === 'date') renderWeek(); reset(); };
+    for (const id of ['kind','scope-filter','date','todo-filter']) $(id).onchange = () => { if (id === 'date') renderWeek(); reset(); };
+    $('project-control').onclick = () => {
+      if (switchingProject || busy || !projectsLoaded) return;
+      const choices = [{ key: 'global', name: '全局记忆' }, ...projectChoices];
+      $('project-choices').replaceChildren(...choices.map((choice) => {
+        const node = button(choice.name, () => {
+          $('project-dialog').close();
+          $('project-switch').value = choice.key;
+          $('project-switch').dispatchEvent(new Event('change'));
+        }, 'project-choice');
+        node.dataset.projectKey = choice.key;
+        node.setAttribute('aria-pressed', String(choice.key === projectSelection));
+        return node;
+      }));
+      $('project-dialog').showModal();
+    };
+    $('project-close').onclick = () => $('project-dialog').close();
+    $('project-switch').onchange = async () => {
+      const next = $('project-switch').value;
+      if ($('editor').open || $('send-dialog').open || $('confirm-dialog').open || busy || switchingProject) {
+        $('project-switch').value = projectSelection;
+        notice('请先保存或取消当前编辑，再切换项目。', true); return;
+      }
+      const choice = projectChoices.find((item) => item.key === next);
+      if (next !== 'global' && !choice) { $('project-switch').value = projectSelection; return; }
+      switchingProject = true; $('project-switch').disabled = true; $('add').disabled = true; ++sequence;
+      try {
+        await window.enso.projects.select(choice?.context ?? null);
+        projectSelection = next;
+        $('project-label').textContent = choice?.name ?? '全局记忆';
+        status = null; lastStatusAt = 0; offset = 0; history.length = 0;
+        $('search').value = ''; $('scope-filter').value = ''; $('kind').value = ''; $('todo-filter').value = 'all';
+        shotCache.clear(); fullCache.clear(); shotWaiters.clear(); shotQueue = [];
+        notice(''); await load();
+      } catch (error) {
+        $('project-switch').value = projectSelection; notice(error.message ?? String(error), true);
+      } finally { switchingProject = false; $('project-switch').disabled = false; $('add').disabled = !status?.enabled; }
+    };
     $('refresh').onclick = () => { notice(''); lastStatusAt = 0; load(); };
     $('add').onclick = () => openEditor(tab);
     $('prev').onclick = () => { offset = history.pop() ?? 0; load(); };

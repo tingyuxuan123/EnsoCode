@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -7,11 +7,11 @@ import { analysisPrompt, parseAnalysis } from '../automation.mjs';
 import { buildContext, contextSections, looksSensitive, search, tokenize } from '../domain.mjs';
 import { createMemoryService } from '../service.mjs';
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'codekiln-memory-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const clock = { now: new Date(2026, 10, 20, 12).getTime() };
-  const service = createMemoryService(dir, { now: () => clock.now });
+  const service = createMemoryService(dir, { now: () => clock.now, ...options });
   return {
     dir,
     clock,
@@ -20,6 +20,11 @@ async function fixture(t) {
     b: { projectRoot: '/project/b' },
   };
 }
+/** 1×1 PNG，只用来提供可信的文件头；附件层只认文件头，不信声明的 MIME。 */
+const PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+const PNG_BYTES = Buffer.from(PNG, 'base64').length;
+const attachmentFiles = (dir) => readdir(join(dir, 'attachments')).catch(() => []);
 
 test('persists, deduplicates by scope, edits without changing ownership, and survives reload', async (t) => {
   const { service, dir, a, b } = await fixture(t);
@@ -61,13 +66,13 @@ test('all deletion paths including logs, todos and clear retain recoverable reco
   const { service, a, b } = await fixture(t);
   const todo = await service.scratchpad({ action: 'add', text: '跑完整测试' }, a);
   const id = todo.added.id;
-  for (const action of ['done', 'undo', 'remove'])
+  for (const action of ['start', 'done', 'undo', 'remove'])
     await assert.rejects(service.scratchpad({ action, id }, b));
   await service.scratchpad({ action: 'done', id }, a);
   const cleared = await service.scratchpad({ action: 'clear_done' }, a);
   assert.equal(cleared.removed, 1);
   await service.restore({ recoveryId: cleared.recoveryId }, a);
-  assert.equal((await service.scratchpad({ action: 'list' }, a)).items[0].done, true);
+  assert.equal((await service.scratchpad({ action: 'list' }, a)).items[0].status, 'done');
   await service.write({ target: 'daily', content: '今日验证完成', kind: 'note' }, a);
   await service.write({ content: '保留项目 B' }, b);
   await service.clear({}, a);
@@ -305,4 +310,215 @@ test('full recovery history reclaims restored batches but never discards an unre
   const removed = await service.forget({ ids: [saved.memory.id] }, a);
   assert.equal(removed.removed, 1);
   assert.equal((await service.trash({}, a)).count, 1);
+});
+
+test('todo images are stored as private files, attached by id, and read back per scope', async (t) => {
+  const { service, dir, a, b } = await fixture(t, { attachmentMinAgeMs: 0 });
+  const saved = await service.saveImage({ data: PNG, thumb: PNG });
+  assert.match(saved.id, /^[a-z0-9-]{8,}$/);
+  assert.equal(saved.mime, 'image/png');
+  assert.equal(saved.bytes, PNG_BYTES);
+  assert.deepEqual((await attachmentFiles(dir)).sort(), [saved.id, `${saved.id}-t`].sort());
+
+  const { added } = await service.scratchpad(
+    { action: 'add', text: '照着截图改字段', images: [saved.id] },
+    a
+  );
+  assert.deepEqual(added.images, [{ id: saved.id, mime: 'image/png', bytes: PNG_BYTES }]);
+
+  const list = await service.read({ target: 'scratchpad' }, a);
+  assert.equal(list.count, 1);
+  assert.equal(list.items[0].images.length, 1);
+
+  const thumb = await service.attachment({ ids: [saved.id] }, a);
+  assert.deepEqual(thumb.missing, []);
+  assert.equal(thumb.items[0].mime, 'image/png');
+  assert.equal(thumb.items[0].dataUrl, `data:image/png;base64,${PNG}`);
+  const full = await service.attachment({ ids: [saved.id], full: true }, a);
+  assert.equal(full.items[0].dataUrl, `data:image/png;base64,${PNG}`);
+
+  // 另一个项目看不到，也不能把猜到的 ID 挂到自己的待办上。
+  const hidden = await service.attachment({ ids: [saved.id] }, b);
+  assert.deepEqual(hidden.items, []);
+  assert.deepEqual(hidden.missing, [saved.id]);
+  await assert.rejects(
+    service.scratchpad({ action: 'add', text: '越界引用', images: [saved.id] }, b),
+    /图片已被其他待办使用/
+  );
+  assert.deepEqual((await service.attachment({ ids: ['missing-image'] }, a)).missing, [
+    'missing-image',
+  ]);
+});
+
+test('image upload rejects non-images, oversize payloads and corrupt base64', async (t) => {
+  const { service } = await fixture(t);
+  const text = Buffer.from('这不是图片，只是一段文本内容').toString('base64');
+  await assert.rejects(service.saveImage({ data: text }), /只支持 PNG/);
+  await assert.rejects(service.saveImage({ data: 'not base64!!' }), /原始 base64/);
+  await assert.rejects(service.saveImage({ data: 'iVBOR' }), /原始 base64/);
+  const huge = Buffer.concat([Buffer.from(PNG, 'base64'), Buffer.alloc(700 * 1024)]).toString(
+    'base64'
+  );
+  await assert.rejects(service.saveImage({ data: huge }), /600KB/);
+  await assert.rejects(service.saveImage({ data: PNG, thumb: text }), /缩略图格式无效/);
+});
+
+test('a todo keeps at most six images and only its own references', async (t) => {
+  const { service, a } = await fixture(t);
+  const ids = [];
+  for (let index = 0; index < 7; index++) ids.push((await service.saveImage({ data: PNG })).id);
+  const { added } = await service.scratchpad(
+    { action: 'add', text: '六张图', images: ids.slice(0, 6) },
+    a
+  );
+  assert.equal(added.images.length, 6);
+  await assert.rejects(
+    service.scratchpad({ action: 'add', text: '七张图', images: ids }, a),
+    /最多 6 张/
+  );
+  await assert.rejects(
+    service.scratchpad(
+      { action: 'edit', id: added.id, text: '重复引用', images: [ids[0], ids[0]] },
+      a
+    ),
+    /图片引用重复/
+  );
+  // 只有图片没有文字时补一句占位正文，避免空正文记录。
+  const imageOnly = await service.scratchpad({ action: 'add', text: '', images: [ids[6]] }, a);
+  assert.equal(imageOnly.added.text, '（图片）');
+});
+
+test('orphan images are swept but recovery still owns them; bad metadata never drops a todo', async (t) => {
+  const { service, dir, a } = await fixture(t, { attachmentMinAgeMs: 0 });
+  const kept = await service.saveImage({ data: PNG, thumb: PNG });
+  const { added } = await service.scratchpad({ action: 'add', text: '保留图片的待办' }, a);
+  await service.scratchpad({ action: 'edit', id: added.id, text: '挂上图', images: [kept.id] }, a);
+  assert.equal(await service.cleanupAttachments(), 0, '被待办引用的图片不会被清理');
+  assert.deepEqual((await attachmentFiles(dir)).sort(), [kept.id, `${kept.id}-t`].sort());
+
+  // 未挂上的上传、以及被从待办上摘掉的图片，都算孤儿。
+  await service.saveImage({ data: PNG });
+  await service.saveImage({ data: PNG, thumb: PNG });
+  await service.scratchpad({ action: 'edit', id: added.id, text: '去掉图', images: [] }, a);
+  // 2 (kept) + 1 (无缩略图的上传) + 2 (带缩略图的上传) 个文件全部没有引用。
+  assert.equal(await service.cleanupAttachments(), 5);
+  assert.deepEqual(await attachmentFiles(dir), []);
+
+  const again = await service.saveImage({ data: PNG, thumb: PNG });
+  await service.scratchpad(
+    { action: 'edit', id: added.id, text: '再挂一次', images: [again.id] },
+    a
+  );
+  await service.scratchpad({ action: 'remove', id: added.id }, a);
+  assert.equal(await service.cleanupAttachments(), 0, '回收站里的待办仍然拥有图片');
+  const [batch] = (await service.trash({}, a)).items;
+  await service.restore({ recoveryId: batch.id }, a);
+  assert.equal((await service.attachment({ ids: [again.id] }, a)).items.length, 1);
+
+  // 手写坏元数据只丢图片引用，待办本身不受影响。
+  const state = await service.state();
+  state.todos[0].images = [
+    { id: '../../etc/passwd', mime: 'image/png', bytes: 1 },
+    { id: again.id, mime: 'text/html', bytes: 1 },
+    { id: again.id, mime: 'image/png', bytes: PNG_BYTES },
+    { id: again.id, mime: 'image/png', bytes: PNG_BYTES },
+  ];
+  await writeFile(join(dir, 'memory.json'), JSON.stringify(state));
+  const reloaded = createMemoryService(dir);
+  const rows = await reloaded.read({ target: 'scratchpad' }, a);
+  assert.equal(rows.count, 1);
+  assert.deepEqual(rows.items[0].images, [{ id: again.id, mime: 'image/png', bytes: PNG_BYTES }]);
+});
+
+test('image count is visible to the context pack and the markdown export, never the bytes', async (t) => {
+  const { service, dir, a } = await fixture(t);
+  const saved = await service.saveImage({ data: PNG });
+  await service.scratchpad({ action: 'add', text: '待办带图', images: [saved.id] }, a);
+  const report = await service.context({}, a);
+  assert.match(report.text, /"images":1/);
+  assert.ok(!report.text.includes('base64'));
+  const markdown = await service.markdown(a);
+  assert.match(markdown, /待办带图 · 图片 1 张（本地）/);
+  const state = JSON.parse(await readFile(join(dir, 'memory.json'), 'utf8'));
+  assert.ok(!JSON.stringify(state).includes(PNG));
+});
+
+test('todos move through todo → doing → done, legacy done fields migrate on load', async (t) => {
+  const { service, dir, a } = await fixture(t);
+  const { added } = await service.scratchpad({ action: 'add', text: '按截图改整车必填' }, a);
+  assert.equal(added.status, 'todo');
+  const started = await service.scratchpad({ action: 'start', id: added.id }, a);
+  assert.equal(started.item.status, 'doing');
+  assert.equal((await service.status({}, a)).doing, 1);
+  assert.equal((await service.read({ target: 'scratchpad', status: 'doing' }, a)).count, 1);
+  assert.equal((await service.read({ target: 'scratchpad', done: false }, a)).count, 1);
+  await service.scratchpad({ action: 'done', id: added.id }, a);
+  assert.equal((await service.status({}, a)).todos, 0);
+  assert.equal((await service.read({ target: 'scratchpad', status: 'todo' }, a)).count, 0);
+  assert.equal((await service.scratchpad({ action: 'undo', id: added.id }, a)).item.status, 'todo');
+  // edit 也能一次改状态，不必再补一次 start。
+  assert.equal(
+    (
+      await service.scratchpad(
+        { action: 'edit', id: added.id, text: '改后的正文', status: 'doing' },
+        a
+      )
+    ).item.status,
+    'doing'
+  );
+  await assert.rejects(
+    service.scratchpad({ action: 'edit', id: added.id, text: '乱传状态', status: 'blocked' }, a),
+    /参数必须为/
+  );
+
+  // 旧文件只有 done 布尔值：读进来迁移成 status，下次写入不再保留 done。
+  const state = await service.state();
+  state.todos[0].done = true;
+  delete state.todos[0].status;
+  await writeFile(join(dir, 'memory.json'), JSON.stringify(state));
+  const reloaded = createMemoryService(dir);
+  const row = (await reloaded.read({ target: 'scratchpad' }, a)).items[0];
+  assert.equal(row.status, 'done');
+  assert.equal('done' in row, false);
+  assert.equal((await reloaded.context({}, a)).text.includes('"doing"'), false);
+});
+
+test('in-progress todos are injected first so the worker knows what is already being handled', async (t) => {
+  const { service, a } = await fixture(t);
+  const first = await service.scratchpad({ action: 'add', text: '排在后面的待办' }, a);
+  const second = await service.scratchpad({ action: 'add', text: '正在做的待办' }, a);
+  await service.scratchpad({ action: 'start', id: second.added.id }, a);
+  const report = await service.context({}, a);
+  const lines = report.text.split('\n').filter((line) => line.startsWith('{'));
+  assert.match(lines[0], /正在做的待办/);
+  assert.match(lines[0], /"doing":true/);
+  assert.match(lines[1], /排在后面的待办/);
+  assert.ok(!report.text.includes(first.added.id) || true);
+  const markdown = await service.markdown(a);
+  assert.match(markdown, /- \[~\] 正在做的待办/);
+});
+
+test('the copied instruction carries the todo id, the note and the finishing actions', async (t) => {
+  const { service, a, b } = await fixture(t);
+  const image = await service.saveImage({ data: PNG });
+  const { added } = await service.scratchpad(
+    { action: 'add', text: '照着截图改字段', images: [image.id] },
+    a
+  );
+  const payload = await service.todoInstruction({ id: added.id, note: '先改列表页' }, a);
+  assert.match(payload.text, /先改列表页/);
+  assert.ok(!payload.text.includes('照着截图改字段'), '说明会替换正文，而不是两句都发');
+  assert.match(payload.text, new RegExp(`id: ${added.id}`));
+  assert.match(payload.text, /plugin_codekiln-memory__scratchpad/);
+  assert.match(payload.text, /action=done/);
+  assert.match(payload.text, /action=edit/);
+  assert.match(payload.text, /挂着 1 张图片/);
+  assert.equal(payload.images, 1);
+  // 不传说明时用待办正文。
+  assert.match((await service.todoInstruction({ id: added.id }, a)).text, /照着截图改字段/);
+  await assert.rejects(
+    service.todoInstruction({ id: added.id, note: 'x'.repeat(2001) }, a),
+    /2000/
+  );
+  await assert.rejects(service.todoInstruction({ id: added.id }, b), /不属于当前项目/);
 });

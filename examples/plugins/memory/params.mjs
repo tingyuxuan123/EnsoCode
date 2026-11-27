@@ -2,11 +2,11 @@ import { isObject } from './domain.mjs';
 
 const OPTIONAL = {
   memory_write: ['target', 'kind', 'scope', 'pinned', 'id'],
-  memory_read: ['target', 'date', 'id', 'kind', 'scope', 'done', 'limit', 'offset'],
+  memory_read: ['target', 'date', 'id', 'kind', 'scope', 'done', 'status', 'limit', 'offset'],
   memory_search: ['query', 'sources', 'kind', 'limit', 'offset'],
   memory_forget: ['target'],
   memory_restore: [],
-  scratchpad: ['action', 'text', 'id', 'scope', 'limit', 'offset'],
+  scratchpad: ['action', 'text', 'id', 'scope', 'status', 'limit', 'offset'],
   memory_status: [],
 };
 

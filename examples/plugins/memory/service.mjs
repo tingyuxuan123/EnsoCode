@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createAttachmentStore } from './attachments.mjs';
 import {
   boolean,
   content,
@@ -15,6 +16,8 @@ import {
   parseSettings,
   search,
   similar,
+  TODO_IMAGE_LIMIT,
+  TODO_STATUSES,
   validDate,
   visible,
 } from './domain.mjs';
@@ -24,6 +27,31 @@ const shortId = (value) => {
   if (typeof value !== 'string' || !/^[a-z0-9-]{1,80}$/.test(value))
     throw new Error('记录 ID 无效');
   return value;
+};
+/** 只带图片的待办也要有正文：占位文本让注入、导出和检索都有可读内容。 */
+const IMAGE_ONLY_TEXT = '（图片）';
+const todoText = (value, hasImages) =>
+  hasImages && (value === undefined || (typeof value === 'string' && !value.trim()))
+    ? IMAGE_ONLY_TEXT
+    : content(value);
+const instructionFor = (row, value) => {
+  if (value !== undefined && typeof value !== 'string') throw new Error('说明须为文本');
+  const note = value?.trim() ?? '';
+  if (note.length > 2000) throw new Error('说明最多 2000 字符');
+  const images = row.images?.length ?? 0;
+  return {
+    text: [
+      note || row.text,
+      '',
+      `—— 来自 CodeKiln 记忆的待办（id: ${row.id}）`,
+      ...(images ? [`这条待办在记忆里还挂着 ${images} 张图片，请按图核对。`] : []),
+      `完成后请调用记忆插件的 scratchpad 工具（plugin_codekiln-memory__scratchpad）把这条待办标为已完成：action=done, id=${row.id}。`,
+      `需要改写待办正文时用 action=edit, id=${row.id}, text=新的正文（已有图片会保留）。`,
+      '暂时做不完就用 action=start 保持进行中，或 action=undo 退回待办，并说明原因。',
+    ].join('\n'),
+    images,
+    todo: { id: row.id, text: row.text },
+  };
 };
 const projectOf = (ctx) =>
   typeof ctx?.projectRoot === 'string' && ctx.projectRoot ? ctx.projectRoot : null;
@@ -88,8 +116,9 @@ function removeRecords(state, items, now, reason) {
   return { removed: items.length, recoveryId: entry.id };
 }
 
-export function createMemoryService(directory, { now = Date.now } = {}) {
+export function createMemoryService(directory, { now = Date.now, attachmentMinAgeMs } = {}) {
   const storage = createStorage(directory);
+  const attachments = createAttachmentStore(directory, { minAgeMs: attachmentMinAgeMs });
   const readState = () => storage.load();
   const base = (args, ctx, source) => ({
     id: randomUUID(),
@@ -98,6 +127,33 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
     createdAt: now(),
     updatedAt: now(),
   });
+  /** 图片归属：已认领的图只允许原待办继续引用，避免按猜测的 ID 抢别的项目的图。 */
+  const claimedImages = (state) => {
+    const owners = new Map();
+    for (const row of state.todos)
+      for (const image of row.images ?? []) {
+        if (!owners.has(image.id)) owners.set(image.id, new Set());
+        owners.get(image.id).add(row.id);
+      }
+    return owners;
+  };
+  const resolveImages = async (state, value, row) => {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value) || value.length > TODO_IMAGE_LIMIT)
+      throw new Error(`每条待办最多 ${TODO_IMAGE_LIMIT} 张图片`);
+    const ids = value.map(shortId);
+    if (new Set(ids).size !== ids.length) throw new Error('图片引用重复');
+    const owners = claimedImages(state);
+    const images = [];
+    for (const id of ids) {
+      const claimed = owners.get(id);
+      if (claimed && (!row || !claimed.has(row.id))) throw new Error('图片已被其他待办使用');
+      const meta = await attachments.describe(id).catch(() => null);
+      if (!meta) throw new Error('图片不存在或已被清理，请重新粘贴');
+      images.push(meta);
+    }
+    return images;
+  };
   const service = {
     state: readState,
     analysisToken,
@@ -194,14 +250,22 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
       const kind = enumValue(args.kind, target === 'daily' ? DAILY_KINDS : KINDS, undefined);
       const scope = enumValue(args.scope, ['global', 'project'], undefined);
       const done = boolean(args.done, undefined);
+      const status = enumValue(args.status, TODO_STATUSES, undefined);
       if (date) rows = rows.filter((row) => row.date === date);
       if (id) rows = rows.filter((row) => row.id === id);
       if (kind) rows = rows.filter((row) => row.kind === kind);
       if (scope) rows = rows.filter((row) => row.scope === scope);
       if (done !== undefined && target === 'scratchpad')
-        rows = rows.filter((row) => row.done === done);
+        rows = rows.filter((row) => (row.status === 'done') === done);
+      if (status !== undefined && target === 'scratchpad')
+        rows = rows.filter((row) => row.status === status);
       return page(
-        rows.sort((a, b) => Number(b.pinned) - Number(a.pinned) || newest(a, b)),
+        rows.sort(
+          (a, b) =>
+            Number(b.pinned) - Number(a.pinned) ||
+            Number(b.status === 'doing') - Number(a.status === 'doing') ||
+            newest(a, b)
+        ),
         args
       );
     },
@@ -286,15 +350,21 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
       const args = argsOf(input);
       const action = enumValue(
         args.action,
-        ['add', 'done', 'undo', 'remove', 'clear_done', 'list', 'edit'],
+        ['add', 'start', 'done', 'undo', 'remove', 'clear_done', 'list', 'edit'],
         'list'
       );
       if (action === 'list') return service.read({ ...args, target: 'scratchpad' }, ctx);
-      return storage.transaction((state) => {
+      return storage.transaction(async (state) => {
         ensureEnabled(state);
         if (action === 'add') {
           capacity(state, 'todos');
-          const row = { ...base(args, ctx, 'user'), text: content(args.text), done: false };
+          const images = (await resolveImages(state, args.images)) ?? [];
+          const row = {
+            ...base(args, ctx, 'user'),
+            text: todoText(args.text, images.length > 0),
+            status: 'todo',
+            ...(images.length ? { images } : {}),
+          };
           state.todos.push(row);
           invalidate(state, row.projectKey);
           return { added: row };
@@ -303,7 +373,7 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
           return removeRecords(
             state,
             state.todos
-              .filter((row) => allowed(row, ctx) && row.done)
+              .filter((row) => allowed(row, ctx) && row.status === 'done')
               .map((record) => ({ type: 'todos', record })),
             now(),
             'clear-done'
@@ -312,11 +382,126 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
         if (!row) throw new Error('待办不存在或不属于当前项目');
         if (action === 'remove')
           return removeRecords(state, [{ type: 'todos', record: row }], now(), 'delete');
-        if (action === 'edit') row.text = content(args.text);
-        else row.done = action === 'done';
+        if (action === 'edit') {
+          const images = await resolveImages(state, args.images, row);
+          const next = images ?? row.images ?? [];
+          const status = enumValue(args.status, TODO_STATUSES, undefined);
+          row.text = todoText(args.text ?? (next.length ? row.text : undefined), next.length > 0);
+          if (status) row.status = status;
+          if (images) {
+            if (images.length) row.images = images;
+            else delete row.images;
+          }
+        } else row.status = action === 'start' ? 'doing' : action === 'done' ? 'done' : 'todo';
         row.updatedAt = now();
         invalidate(state, row.projectKey);
         return { item: row };
+      });
+    },
+    /** 渲染层把压缩后的图片以 base64 交上来；只按文件头判定格式，文件名不带扩展名。 */
+    async saveImage(input = {}) {
+      const args = argsOf(input);
+      ensureEnabled(await readState());
+      return attachments.put({ data: args.data, thumb: args.thumb });
+    },
+    /** 只服务当前可见待办引用过的图片；返回缩略图，`full` 用于大图预览。 */
+    async attachment(input = {}, ctx = {}) {
+      const args = argsOf(input);
+      if (!Array.isArray(args.ids) || !args.ids.length || args.ids.length > TODO_IMAGE_LIMIT)
+        throw new Error(`ids 须含 1–${TODO_IMAGE_LIMIT} 个图片 ID`);
+      const full = boolean(args.full, false);
+      const state = await readState();
+      ensureEnabled(state);
+      const visibleIds = new Set();
+      for (const row of state.todos) {
+        if (!allowed(row, ctx)) continue;
+        for (const image of row.images ?? []) visibleIds.add(image.id);
+      }
+      const items = [];
+      const missing = [];
+      let budget = 0;
+      for (const raw of args.ids) {
+        const id = shortId(raw);
+        const found = visibleIds.has(id) ? await attachments.get(id, { full }) : null;
+        const encoded = found?.data.toString('base64') ?? '';
+        // 宿主一次 UI 调用限 1MB：单次响应留出余量，剩下的让渲染层再要一次。
+        if (!found || budget + encoded.length > 900_000) {
+          missing.push(id);
+          continue;
+        }
+        budget += encoded.length;
+        items.push({
+          id,
+          mime: found.mime,
+          bytes: found.bytes,
+          dataUrl: `data:${found.mime};base64,${encoded}`,
+        });
+      }
+      return { items, missing };
+    },
+    /** 待办与回收站都不再引用的图片文件才删；新写入的文件由存储层自己保护。 */
+    async cleanupAttachments() {
+      const state = await readState();
+      const referenced = new Set();
+      for (const row of state.todos) for (const image of row.images ?? []) referenced.add(image.id);
+      for (const entry of state.recovery)
+        for (const item of entry.records)
+          for (const image of item.record?.images ?? []) referenced.add(image.id);
+      return attachments.sweep(referenced);
+    },
+    /**
+     * 把一条待办整理成可以直接粘进会话的指令：正文（可替换说明）+ 待办 ID + 完成/改写动作。
+     * 复制只输出文字；实际发送的原图由 todoForSend 一并读取。
+     */
+    async todoInstruction(input = {}, ctx = {}) {
+      const args = argsOf(input);
+      const id = shortId(args.id);
+      const state = await readState();
+      ensureEnabled(state);
+      const row = state.todos.find((item) => item.id === id && allowed(item, ctx));
+      if (!row) throw new Error('待办不存在或不属于当前项目');
+      return instructionFor(row, args.note);
+    },
+    /** Load all original attachments before sending: never silently truncate a pictured task. */
+    async todoForSend(input = {}, ctx = {}) {
+      const args = argsOf(input);
+      const state = await readState();
+      ensureEnabled(state);
+      const row = state.todos.find((item) => item.id === shortId(args.id) && allowed(item, ctx));
+      if (!row) throw new Error('待办不存在或不属于当前项目');
+      if (row.status === 'done') throw new Error('待办已完成，请先撤销完成再发送');
+      if ((row.images?.length ?? 0) > 4)
+        throw new Error('会话单次最多接收 4 张图片，请拆分待办后发送；原图片全部保留');
+      const images = [];
+      for (const image of row.images ?? []) {
+        const found = await attachments.get(image.id, { full: true });
+        if (!found) throw new Error('待办图片缺失，请先重新添加，未发送任何内容');
+        if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(found.mime))
+          throw new Error('会话仅支持 PNG/JPEG/WebP/GIF，请重新添加这张图片后发送');
+        images.push({ data: found.data.toString('base64'), mimeType: found.mime });
+      }
+      const instruction = instructionFor(row, args.note);
+      return {
+        text: `${instruction.text}${images.length ? `\n本条消息已附上全部 ${images.length} 张原图。` : ''}`,
+        images,
+        id: row.id,
+        expected: createHash('sha256').update(JSON.stringify(row)).digest('hex'),
+      };
+    },
+    /** A late ACK must not overwrite an Agent's completion or a user's newer edit. */
+    async markTodoSent(input, ctx = {}) {
+      const args = argsOf(input);
+      return storage.transaction((state) => {
+        ensureEnabled(state);
+        const row = state.todos.find((item) => item.id === shortId(args.id) && allowed(item, ctx));
+        if (!row) return { status: null, updated: false };
+        const same =
+          createHash('sha256').update(JSON.stringify(row)).digest('hex') === args.expected;
+        if (!same || row.status !== 'todo') return { status: row.status, updated: false };
+        row.status = 'doing';
+        row.updatedAt = now();
+        invalidate(state, row.projectKey);
+        return { status: row.status, updated: true };
       });
     },
     async trash(input = {}, ctx = {}) {
@@ -371,7 +556,8 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
         project: projectOf(ctx),
         revision: state.revision,
         memories: state.memories.filter((row) => allowed(row, ctx)).length,
-        todos: state.todos.filter((row) => allowed(row, ctx) && !row.done).length,
+        todos: state.todos.filter((row) => allowed(row, ctx) && row.status !== 'done').length,
+        doing: state.todos.filter((row) => allowed(row, ctx) && row.status === 'doing').length,
         logs: state.logs.filter((row) => allowed(row, ctx)).length,
         recoverable: state.recovery.filter(
           (row) =>
@@ -481,7 +667,9 @@ export function createMemoryService(directory, { now = Date.now } = {}) {
         );
       lines.push('\n## 待办');
       for (const row of state.todos.filter((item) => allowed(item, ctx)))
-        lines.push(`- [${row.done ? 'x' : ' '}] ${row.text}`);
+        lines.push(
+          `- [${row.status === 'done' ? 'x' : row.status === 'doing' ? '~' : ' '}] ${row.text}${row.images?.length ? ` · 图片 ${row.images.length} 张（本地）` : ''}`
+        );
       lines.push('\n## 每日日志');
       for (const row of state.logs.filter((item) => allowed(item, ctx)).sort(newest))
         lines.push(`\n### ${row.date} · ${row.kind}\n\n${row.text}`);

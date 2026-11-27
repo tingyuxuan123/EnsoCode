@@ -227,7 +227,9 @@ export function createAutomation(enso, service, { changed, report, now = Date.no
       const state = await service.state();
       if (!state.settings.enabled) return;
       const todos = state.todos.filter(
-        (item) => !item.done && (item.projectKey === null || item.projectKey === ctx.projectRoot)
+        (item) =>
+          item.status !== 'done' &&
+          (item.projectKey === null || item.projectKey === ctx.projectRoot)
       );
       const logs = state.logs
         .filter(
@@ -239,7 +241,7 @@ export function createAutomation(enso, service, { changed, report, now = Date.no
         .slice(-15);
       const lines = [
         '压缩前交接',
-        ...todos.map((item) => `待办：${item.text}`),
+        ...todos.map((item) => `${item.status === 'doing' ? '进行中' : '待办'}：${item.text}`),
         ...logs.map((item) => `${item.kind}：${item.text}`),
       ];
       // Keep whole entries, never split a credential-sensitive token into a different pattern.
