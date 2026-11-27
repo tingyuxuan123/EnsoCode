@@ -77,7 +77,9 @@ export function childPluginEventPlan(
 
 export class PluginEventInvoker {
   private readonly pending = new Map<string, { settle(value: unknown): void }>();
-  private sender: ExtensionAPI['sendMessage'] | undefined;
+  private sender:
+    | ((...args: Parameters<ExtensionAPI['sendMessage']>) => void | Promise<void>)
+    | undefined;
   constructor(
     readonly plan: PluginEventPlan,
     private readonly emit: (event: PluginSessionEmit) => void,
@@ -96,7 +98,9 @@ export class PluginEventInvoker {
       this.plan.intercept.some((item) => item.event === event)
     );
   }
-  bindSender(sender: ExtensionAPI['sendMessage']): void {
+  bindSender(
+    sender: (...args: Parameters<ExtensionAPI['sendMessage']>) => void | Promise<void>
+  ): void {
     this.sender = sender;
   }
   notify(event: PluginEventName, data: unknown): void {
@@ -148,11 +152,14 @@ export class PluginEventInvoker {
         : undefined);
     for (const entry of [...this.pending.values()]) entry.settle(value);
   }
-  deliver(message: PluginInjectMessage): { ok: true } | { ok: false; error: string } {
+  deliver(
+    message: PluginInjectMessage,
+    onFailure?: (error: string) => void
+  ): { ok: true } | { ok: false; error: string } {
     if (this.childSession) return { ok: false, error: '会话未声明注入' };
     if (!this.sender) return { ok: false, error: '会话未就绪' };
     try {
-      this.sender(
+      const delivery = this.sender(
         {
           customType: PLUGIN_MESSAGE_TYPE,
           content: message.images?.length
@@ -166,6 +173,12 @@ export class PluginEventInvoker {
         },
         { deliverAs: message.deliverAs, triggerTurn: message.triggerTurn }
       );
+      // The raw session sender can reject during before_agent_start/model preparation.
+      // Never await an entire model run for admission, and never discard that rejection.
+      if (delivery)
+        void delivery.catch((error) =>
+          onFailure?.(error instanceof Error ? error.message : String(error))
+        );
       return { ok: true };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };

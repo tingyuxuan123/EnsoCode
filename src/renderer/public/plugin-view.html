@@ -48,6 +48,10 @@
           const id = ++sequence;
           return new Promise((resolve, reject) => { pending.set(id, { resolve, reject }); port.postMessage({ id, method, args: args ?? null }); });
         },
+        projects: Object.freeze({
+          list() { return window.enso.call('__host.projects.list', {}); },
+          select(context) { return window.enso.call('__host.projects.select', context); },
+        }),
       }) });
       const initialize = (event) => {
         const data = event.data;

@@ -12,9 +12,11 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { type AgentCommand, parseAgentCommand } from '@shared/types/agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runPluginHost } from '../../../pluginHost/host';
-import { ExtensionPluginService } from './service';
+import { PluginInjectionRequests } from './injectionRequests';
+import { ExtensionPluginService, type PluginSessionBridge } from './service';
 
 class Child extends EventEmitter {
   private handler: (m: unknown) => void = () => {};
@@ -47,7 +49,7 @@ afterEach(() => {
   for (const s of services.splice(0)) s.dispose();
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
-function setup(root = temp()) {
+function setup(root = temp(), sessionBridge?: PluginSessionBridge) {
   const fork = vi.fn(() => new Child());
   const service = new ExtensionPluginService({
     root,
@@ -55,6 +57,7 @@ function setup(root = temp()) {
     hostPath: '/host',
     env: {},
     fork,
+    sessionBridge: () => sessionBridge ?? null,
     gate: {
       fetch: vi.fn(),
       notify: () => true,
@@ -126,6 +129,46 @@ const toolCall = (
     projectRoot: null,
   });
 describe('desktop plugin service', () => {
+  it('projects service inject input through the actual command producer into the strict worker parser', async () => {
+    const identity = { sessionId: 's', generation: '11111111-1111-4111-8111-111111111111' };
+    const posted: AgentCommand[] = [];
+    const requests = new PluginInjectionRequests(
+      (command) => {
+        posted.push(command);
+        return { ok: true };
+      },
+      () => identity
+    );
+    const inject = vi.fn((sessionId, message, signal) =>
+      requests.inject({ ...identity, sessionId }, message, signal)
+    );
+    const { service } = setup(temp(), { inject, abort: () => ({ ok: true }) });
+    await install(service, { permissions: ['agent.tool', 'agent.inject'] });
+    const invocation = service.gate.invocations.create({
+      pluginId: 'enso.test',
+      sessionId: 's',
+      projectRoot: null,
+      gesture: true,
+    });
+    const pending = service.gate.handle(
+      'enso.test',
+      'session.inject',
+      { text: 'todo', triggerTurn: true },
+      invocation
+    );
+    const command = posted[0];
+    expect(parseAgentCommand(command)).toEqual(command);
+    expect(inject.mock.calls[0][1]).not.toHaveProperty('sessionId');
+    expect(inject.mock.calls[0][1]).not.toHaveProperty('signal');
+    if (command.type !== 'plugin-inject') throw new Error('missing injection');
+    requests.settle({
+      type: 'plugin-inject-result',
+      identity,
+      requestId: command.requestId,
+      ok: true,
+    });
+    await expect(pending).resolves.toBeNull();
+  });
   it('重启读取 v2 后可管理原插件，写回仍保留 v2、来源和授权', async () => {
     const { service: installed, root } = setup();
     await install(installed);

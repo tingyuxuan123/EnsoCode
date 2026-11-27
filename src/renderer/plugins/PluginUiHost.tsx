@@ -171,7 +171,8 @@ export function PluginUiHost() {
             }),
           ensure: async (id) => {
             const state = useSessionsStore.getState();
-            if (!state.conversations[id]?.started) await state.resumeConversation(id);
+            if (!state.conversations[id]?.started)
+              await state.resumeConversation(id, { allowBlank: true });
             const after = useSessionsStore.getState().conversations[id];
             return after?.started || after?.spawning
               ? null

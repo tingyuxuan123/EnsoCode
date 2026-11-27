@@ -123,6 +123,7 @@ import type { ResolvedPlugins } from './claudePlugins';
 import { isComputerPlatformSupported } from './computer/support';
 import { bundledDesignSkillPaths, getDesignPaths } from './design/appPaths';
 import { PluginAgentRuns } from './extensionPlugins/agentRuns';
+import { PluginInjectionRequests } from './extensionPlugins/injectionRequests';
 import { independentImageProvider } from './imageGeneration/providerHost';
 import { resolveImageProvider } from './imageGenerationConfig';
 import { resolveGlobalInstruction } from './instructionStore';
@@ -463,6 +464,7 @@ export function startAgentWorker(): void {
       // snapshot 分支会顺手改 started / 清 asks，手动刷新不能有这些副作用）
       if (pendingReloads.settle(event) || workspaceLocks.settle(event)) return;
       if (pluginAgents.settle(event)) return;
+      if (pluginInjections?.settle(event)) return;
       if (settleCompletion(event) || settleChoice(event)) return;
       onEvent?.(event);
     }
@@ -483,6 +485,7 @@ export function startAgentWorker(): void {
     pendingReloads.failAll('agent worker exited');
     workspaceLocks.failAll('agent worker exited');
     pluginAgents.failAll('agent worker exited');
+    pluginInjections?.failAll('agent worker exited');
     for (const [id, p] of pendingCompletions) {
       pendingCompletions.delete(id);
       p.reject(new Error('agent worker exited'));
@@ -503,6 +506,7 @@ export function stopAgentWorker(): void {
   parentPluginScopes.clear();
   workspaceLocks.failAll('agent worker stopped');
   pluginAgents.failAll('agent worker stopped');
+  pluginInjections?.failAll('agent worker stopped');
   if (worker) {
     requestedWorkerStops.add(worker);
     worker.kill();
@@ -552,6 +556,7 @@ let workspaceBusy: (id: string) => boolean = () => false;
 const workspaceLocks = new WorkspaceLockRequests(sendAgentCommand);
 /** 插件代理在发起会话所在的 worker 里跑，用该会话的模型与只读工具 */
 const pluginAgents = new PluginAgentRuns((command) => sendAgentCommand(command).ok);
+let pluginInjections: PluginInjectionRequests | undefined;
 const workspaceWorkers = new Map<string, UtilityProcess | null>();
 
 export async function freezeWorkspace(
@@ -1577,20 +1582,22 @@ export function sendPluginInterceptResultToSession(
 export function registerPluginSessionBridge(
   lookup: (sessionId: string) => SessionIdentity | undefined
 ): void {
+  pluginInjections?.failAll('会话桥已重新注册');
+  const injections = new PluginInjectionRequests((command) => {
+    // Injection is never persisted in the generic pre-ready/restart command backlog.
+    if (!worker || !workerReady) return { ok: false, error: 'Agent worker is not ready.' };
+    if (command.type === 'plugin-inject' && workspaceBusy(command.identity.sessionId))
+      return { ok: false, error: 'Workspace operation in progress.' };
+    return sendAgentCommand(command);
+  }, lookup);
+  pluginInjections = injections;
   setNativePluginSessionBridge({
-    inject(sessionId, message) {
+    inject(sessionId, message, signal) {
       if (message.text.length > PLUGIN_INJECT_MAX_CHARS)
         return { ok: false, error: '注入文本过长' };
       const identity = lookup(sessionId);
       if (!identity) return { ok: false, error: '会话不在运行', notRunning: true };
-      const { images, ...rest } = message;
-      const sent = sendAgentCommand({
-        type: 'plugin-inject',
-        identity,
-        ...rest,
-        ...(images.length ? { images } : {}),
-      });
-      return sent.ok ? { ok: true } : { ok: false, error: sent.error ?? '无法注入消息' };
+      return injections.inject(identity, message, signal);
     },
     abort(sessionId) {
       const identity = lookup(sessionId);

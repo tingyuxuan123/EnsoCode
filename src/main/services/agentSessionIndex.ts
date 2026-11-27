@@ -440,6 +440,7 @@ export class AgentSessionIndex {
       event.type === 'workspace-lock-result' ||
       event.type === 'plugin-mcp-result' ||
       event.type === 'plugin-agent-event' ||
+      event.type === 'plugin-inject-result' ||
       event.type === 'workspace-unlock-result'
     )
       return false;

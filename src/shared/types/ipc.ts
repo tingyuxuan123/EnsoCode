@@ -65,6 +65,7 @@ export const IPC_CHANNELS = {
   EXTENSION_PLUGINS_STAGE_PATH: 'extension-plugins:stage-path',
   EXTENSION_PLUGINS_STAGE_URL: 'extension-plugins:stage-url',
   EXTENSION_PLUGINS_CALL: 'extension-plugins:call',
+  EXTENSION_PLUGINS_WORKSPACE_PROJECTS: 'extension-plugins:workspace-projects',
   EXTENSION_PLUGINS_ASSET: 'extension-plugins:asset',
   EXTENSION_PLUGINS_DRAFT_REQUEST: 'extension-plugins:draft-request',
   EXTENSION_PLUGINS_DRAFT_RESPONSE: 'extension-plugins:draft-response',

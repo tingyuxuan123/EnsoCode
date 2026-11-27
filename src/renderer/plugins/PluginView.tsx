@@ -13,6 +13,7 @@ import {
   viewStoragePatch,
   viewThemePush,
 } from './viewBridge';
+import { createWorkspaceBridge } from './workspaceBridge';
 
 export function PluginView({
   pluginId,
@@ -64,7 +65,8 @@ export function PluginFrame({
   fileRef.current = file;
   const channelRef = useRef<MessageChannel | null>(null);
   const sessionRef = useRef(sessionId);
-  sessionRef.current = sessionId;
+  // A frame stays bound to its originating session until explicitly selecting a project.
+  // A background active-chat change cannot redirect its pending editor or later save.
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const frame = frameRef.current;
@@ -81,20 +83,31 @@ export function PluginFrame({
       if (!disposed && event.pluginId === pluginId)
         channel.port1.postMessage(viewEventPush(event.name, event.data));
     });
-    const handle = createViewBridge(
-      async (method, args, gesture) => {
+    const workspace = createWorkspaceBridge({
+      list: async () => {
+        const result = await window.electronAPI.extensionPlugins.workspaceProjects(
+          pluginId,
+          sessionRef.current
+        );
+        if (!result.ok) throw new Error(result.error);
+        return result;
+      },
+      call: async (method, args, gesture, selected) => {
         if (disposed) throw new Error('Plugin view closed');
         const result = await window.electronAPI.extensionPlugins.call({
           pluginId,
           method: 'renderer.call',
           payload: { method, args },
-          sessionId: sessionRef.current,
+          sessionId: selected === undefined ? sessionRef.current : null,
+          ...(selected !== undefined ? { workspace: selected } : {}),
           gesture,
         });
         if (!result.ok) throw new Error(result.error);
         return result.value;
       },
-      () => hasPluginViewGesture(frame, document.activeElement, hasActivePluginGesture())
+    });
+    const handle = createViewBridge(workspace, () =>
+      hasPluginViewGesture(frame, document.activeElement, hasActivePluginGesture())
     );
     channel.port1.onmessage = (event) => {
       if (disposed) return;

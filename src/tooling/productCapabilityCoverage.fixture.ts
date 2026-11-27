@@ -884,6 +884,9 @@ export const IPC_PRODUCT_COVERAGE = {
   EXTENSION_PLUGINS_STAGE_PATH: surfaces('tools.list'),
   EXTENSION_PLUGINS_STAGE_URL: surfaces('tools.list'),
   EXTENSION_PLUGINS_CALL: excluded('Runtime plugin UI call from the trusted renderer.'),
+  EXTENSION_PLUGINS_WORKSPACE_PROJECTS: excluded(
+    '沙箱工作区的本地项目选择，只返回权威项目标识，不授予模型跨项目访问。'
+  ),
   EXTENSION_PLUGINS_ASSET: excluded('Runtime plugin asset fetch from the trusted renderer.'),
   EXTENSION_PLUGINS_DRAFT_REQUEST: excluded('Internal draft bridge request.'),
   EXTENSION_PLUGINS_DRAFT_RESPONSE: excluded('Internal draft bridge response.'),

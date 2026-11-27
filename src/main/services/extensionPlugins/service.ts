@@ -212,8 +212,9 @@ export interface PluginSessionBridge {
       images: PluginInjectImage[];
       deliverAs: 'steer' | 'followUp' | 'nextTurn';
       triggerTurn: boolean;
-    }
-  ): { ok: true } | { ok: false; error: string; notRunning?: boolean };
+    },
+    signal?: AbortSignal
+  ): SessionAttempt | Promise<SessionAttempt>;
   abort(sessionId: string): { ok: true } | { ok: false; error: string };
   /** Main 权威：按会话 id 取当前代次（冷会话返回空）；只给 id，不接受界面传值 */
   generation?(sessionId: string): string | undefined;
@@ -345,7 +346,18 @@ export class ExtensionPluginService {
         const m = this.enabledManifest(id);
         const bridge = this.options.sessionBridge?.();
         return m && bridge
-          ? bridge.inject(input.sessionId, { pluginId: id, pluginName: m.name, ...input })
+          ? bridge.inject(
+              input.sessionId,
+              {
+                pluginId: id,
+                pluginName: m.name,
+                text: input.text,
+                images: input.images,
+                deliverAs: input.deliverAs,
+                triggerTurn: input.triggerTurn,
+              },
+              input.signal
+            )
           : { ok: false, error: '当前环境不能注入消息' };
       },
       abort: (id, sessionId) =>

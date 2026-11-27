@@ -59,6 +59,7 @@ describe('native plugin event worker protocol', () => {
     const inject = {
       type: 'plugin-inject',
       identity,
+      requestId: 'r',
       pluginId: 'example.demo',
       pluginName: 'Demo',
       text: 'hi',
@@ -67,6 +68,13 @@ describe('native plugin event worker protocol', () => {
       triggerTurn: true,
     };
     expect(parseAgentCommand(inject)).not.toBeNull();
+    expect(parseAgentCommand({ ...inject, sessionId: 'parent' })).toBeNull();
+    expect(
+      parseAgentWorkerEvent({ type: 'plugin-inject-result', identity, requestId: 'r', ok: true })
+    ).not.toBeNull();
+    expect(
+      parseAgentWorkerEvent({ type: 'plugin-inject-result', identity, requestId: 'r', ok: false })
+    ).toBeNull();
     expect(
       parseAgentCommand({ ...inject, images: [{ data: 'AAAA', mimeType: 'text/plain' }] })
     ).toBeNull();

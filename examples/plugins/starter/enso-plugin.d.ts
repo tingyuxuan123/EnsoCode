@@ -266,10 +266,12 @@ export interface PluginMainApi {
       sessionId?: string;
       deliverAs?: 'nextTurn' | 'steer' | 'followUp';
       triggerTurn?: boolean;
+      /** Reject a target outside the invoking workspace (including isolated worktrees). */
+      sameWorkspace?: boolean;
     }): Promise<null>;
     abort(sessionId?: string): Promise<null>;
     list(options?: {
-      scope?: 'project' | 'all';
+      scope?: 'project' | 'all' | 'workspace';
     }): Promise<{ current: string | null; sessions: PluginSessionInfo[] }>;
     status(sessionId?: string): Promise<PluginSessionStatus>;
     focus(sessionId: string): Promise<null>;
@@ -392,6 +394,21 @@ export interface PluginViewApi {
   /** 当前浅深模式；背景、文字、强调色、字体等宿主 CSS 变量自动同步到沙箱根元素。 */
   readonly theme: 'light' | 'dark';
   call(method: string, args?: unknown): Promise<unknown>;
+  readonly projects: {
+    list(): Promise<{
+      current: { projectId: string; conversationId?: string } | null;
+      projects: {
+        key: string;
+        name: string;
+        kind: 'project' | 'worktree';
+        context: { projectId: string; conversationId?: string };
+      }[];
+    }>;
+    /** Requires a real user gesture. Future calls use this project's detached UI context. */
+    select(
+      context: { projectId: string; conversationId?: string } | null
+    ): Promise<{ current: { projectId: string; conversationId?: string } | null }>;
+  };
   onTheme(listener: (theme: 'light' | 'dark') => void): Dispose;
   on(name: string, listener: (data: unknown) => void): Dispose;
   readonly file: {

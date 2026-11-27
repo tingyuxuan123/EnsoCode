@@ -6,7 +6,7 @@ import { useOauthCredentialStore } from '@/stores/oauthCredentials';
 import type * as SettingsModule from '../settings';
 import type * as SessionsModule from './index';
 
-const spawn = vi.fn(async () => ({ ok: true }));
+const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ ok: true }));
 let conversationCounter = 0;
 let sourceProjection = {
   projects: [
@@ -172,6 +172,37 @@ describe('resumeConversation model resolution', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ providerId: remembered.id, modelId: 'model' })
     );
+  });
+
+  it('ensures a blank session without a prompt, changing selection, or consuming its draft', async () => {
+    settingsModule.useSettingsStore.setState({
+      providers: [provider('p')],
+      defaultModel: { providerId: 'p', modelId: 'model' },
+    });
+    const id = await sessionsModule.useSessionsStore.getState().newConversation('project');
+    if (!id) throw new Error('missing conversation');
+    sessionsModule.useSessionsStore.setState((state) => ({
+      activeId: null,
+      conversations: {
+        ...state.conversations,
+        [id]: { ...state.conversations[id], draftText: 'keep draft' },
+      },
+    }));
+    await sessionsModule.useSessionsStore.getState().resumeConversation(id, { allowBlank: true });
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: id,
+        providerId: 'p',
+        modelId: 'model',
+        cwd: '/workspace',
+      })
+    );
+    expect(spawn.mock.calls[0][0]).not.toHaveProperty('resumeFile');
+    expect(sessionsModule.useSessionsStore.getState().activeId).toBeNull();
+    expect(sessionsModule.useSessionsStore.getState().conversations[id].draftText).toBe(
+      'keep draft'
+    );
+    expect(sessionsModule.useSessionsStore.getState().conversations[id].messages).toEqual([]);
   });
 
   it('uses the explicit global default when an imported conversation has no last model', async () => {

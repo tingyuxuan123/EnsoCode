@@ -153,8 +153,9 @@ export interface GateDeps {
       images: PluginInjectImage[];
       deliverAs: 'steer' | 'followUp' | 'nextTurn';
       triggerTurn: boolean;
+      signal?: AbortSignal;
     }
-  ): { ok: true } | { ok: false; error: string; notRunning?: boolean };
+  ): SessionAttempt | Promise<SessionAttempt>;
   /** 让发起窗口启动没在运行的会话（有历史就恢复）；就绪与否由注入重试判断 */
   wakeSession?(sessionId: string, origin: number | null): Promise<void>;
   /** Main 权威：按会话 id 取当前代次；只给 id，不接受界面传值 */
@@ -190,6 +191,8 @@ export interface GateDeps {
     list(sessionId: string): PluginSessionInfo[];
     /** 所有项目的主会话 */
     listAll?(): PluginSessionInfo[];
+    listWorkspace?(projectRoot: string): PluginSessionInfo[];
+    workspaceRoot?(sessionId: string): string | null;
     status?(sessionId: string): PluginSessionStatus;
   };
   sessionUi?(
@@ -635,6 +638,20 @@ export class PluginHostGate {
         permit('agent.inject');
         const injectInv = optionalInvocation();
         const sessionId = this.targetSession(pluginId, a, injectInv);
+        if (a.sameWorkspace !== undefined && typeof a.sameWorkspace !== 'boolean')
+          throw pluginError('INVALID_ARGS', 'sameWorkspace 不合法');
+        const assertTarget = () => {
+          if (injectInv?.cancelled) throw pluginError('ABORTED', '调用已取消');
+          if (a.sameWorkspace !== true) return;
+          const root = injectInv?.projectRoot;
+          if (!root) throw pluginError('NO_SESSION', '调用没有工作区上下文');
+          if (
+            this.deps.sessions?.workspaceRoot?.(sessionId) !== root ||
+            !this.deps.sessions?.listWorkspace?.(root).some((session) => session.id === sessionId)
+          )
+            throw pluginError('PERMISSION_DENIED', '目标会话不在当前工作区');
+        };
+        assertTarget();
         if (
           typeof a.text !== 'string' ||
           a.text.length === 0 ||
@@ -659,9 +676,13 @@ export class PluginHostGate {
           images,
           deliverAs,
           triggerTurn: a.triggerTurn === true,
+          ...(injectInv ? { signal: injectInv.controller.signal } : {}),
         };
         const result = await this.untilRunning(
-          () => bridge(pluginId, input),
+          () => {
+            assertTarget();
+            return bridge(pluginId, input);
+          },
           sessionId,
           injectInv?.origin ?? null,
           'INJECT_FAILED'
@@ -845,6 +866,17 @@ export class PluginHostGate {
           }
         );
       case 'session.list': {
+        if (a.scope === 'workspace') {
+          permitRead();
+          const inv = invocation();
+          if (!inv.projectRoot) throw pluginError('NO_SESSION', '调用没有工作区上下文');
+          if (!this.deps.sessions?.listWorkspace)
+            throw pluginError('UNSUPPORTED', '当前环境不能列出工作区会话');
+          return {
+            current: inv.sessionId,
+            sessions: this.deps.sessions.listWorkspace(inv.projectRoot),
+          };
+        }
         if (a.scope === 'all') {
           permit('session.readAll');
           if (!this.deps.sessions?.listAll)
@@ -855,7 +887,7 @@ export class PluginHostGate {
           };
         }
         if (a.scope !== undefined && a.scope !== 'project')
-          throw pluginError('INVALID_ARGS', 'scope 只能是 project 或 all');
+          throw pluginError('INVALID_ARGS', 'scope 只能是 project、workspace 或 all');
         permitRead();
         const current = sessionOf(invocation());
         if (!this.deps.sessions) throw pluginError('UNSUPPORTED', '当前环境不能列出会话');
@@ -1013,12 +1045,12 @@ export class PluginHostGate {
   }
 
   private async untilRunning(
-    attempt: () => SessionAttempt,
+    attempt: () => SessionAttempt | Promise<SessionAttempt>,
     sessionId: string,
     origin: number | null,
     code: string
   ): Promise<SessionAttempt> {
-    let result = attempt();
+    let result = await attempt();
     if (result.ok || !result.notRunning || !this.deps.wakeSession) return result;
     try {
       await this.deps.wakeSession(sessionId, origin);
@@ -1029,7 +1061,7 @@ export class PluginHostGate {
     const deadline = this.deps.now() + WAKE_READY_MS;
     while (!result.ok && result.notRunning && this.deps.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, WAKE_POLL_MS));
-      result = attempt();
+      result = await attempt();
     }
     return result;
   }

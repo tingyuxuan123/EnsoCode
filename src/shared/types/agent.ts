@@ -1481,6 +1481,7 @@ export type AgentCommand =
   | {
       type: 'plugin-inject';
       identity: SessionIdentity;
+      requestId: string;
       pluginId: string;
       pluginName: string;
       text: string;
@@ -1877,6 +1878,7 @@ export type RendererAgentEvent =
       | WorkspaceLockEvent
       | { type: 'plugin-mcp-result' }
       | { type: 'plugin-agent-event' }
+      | { type: 'plugin-inject-result' }
       | { type: 'oauth-pool-select' }
       | Extract<
           AgentWorkerEvent,
@@ -2279,7 +2281,14 @@ export type AgentWorkerEvent =
   /** sessionId：targeted 快照回带请求目标；sessions 为空时 renderer 据此收回 started */
   | { type: 'snapshot'; sessions: SessionSnapshot[]; partial?: boolean; sessionId?: string }
   | { type: 'session-reloaded'; requestId: string; result: SessionReloadResult }
-  | { type: 'plugin-agent-event'; requestId: string; event: PluginAgentRunEvent };
+  | { type: 'plugin-agent-event'; requestId: string; event: PluginAgentRunEvent }
+  | {
+      type: 'plugin-inject-result';
+      identity: SessionIdentity;
+      requestId: string;
+      ok: boolean;
+      error?: string;
+    };
 
 /** MCP 连接旁路事件：无 identity/seq，不属于任何会话，Main 走独立 IPC 通道转发 */
 export type McpWorkerEvent =
@@ -4230,6 +4239,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
       return hasOnlyKeys(value, [
         'type',
         'identity',
+        'requestId',
         'pluginId',
         'pluginName',
         'text',
@@ -4244,6 +4254,7 @@ export function parseAgentCommand(value: unknown): AgentCommand | null {
         value.pluginName.length <= 256 &&
         isNonEmptyString(value.text) &&
         value.text.length <= PLUGIN_INJECT_MAX_CHARS &&
+        isNonEmptyString(value.requestId) &&
         parsePluginInjectImages(value.images) !== null &&
         (value.deliverAs === 'steer' ||
           value.deliverAs === 'followUp' ||
@@ -4432,6 +4443,15 @@ export function parseAgentWorkerEvent(value: unknown): AgentWorkerEvent | null {
       return null;
     const event = parsePluginAgentRunEvent(value.event);
     return event ? { type: 'plugin-agent-event', requestId: value.requestId, event } : null;
+  }
+  if (value.type === 'plugin-inject-result') {
+    return hasOnlyKeys(value, ['type', 'identity', 'requestId', 'ok', 'error']) &&
+      parseSessionIdentity(value.identity) !== null &&
+      isNonEmptyString(value.requestId) &&
+      typeof value.ok === 'boolean' &&
+      (value.ok ? value.error === undefined : isNonEmptyString(value.error))
+      ? (value as unknown as AgentWorkerEvent)
+      : null;
   }
   if (value.type === 'session-reloaded') {
     if (

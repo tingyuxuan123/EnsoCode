@@ -170,6 +170,51 @@ describe('privileged native plugin IPC', () => {
     );
     expect(await h.call(event(), { ...input, generation: 'forged' })).toMatchObject({ ok: false });
   });
+  it('detached project views use only Main-resolved workspace roots, never session or path overrides', async () => {
+    const callUi = vi.fn(async () => null);
+    const resolve = vi.fn((context) =>
+      context?.projectId === 'b'
+        ? { projectRoot: '/projects/b' }
+        : context === null
+          ? { projectRoot: null }
+          : null
+    );
+    const h = createExtensionPluginHandlers({
+      trusted: () => true,
+      service: () => ({ callUi }) as never,
+      pick: vi.fn(),
+      projectRoot: () => '/projects/a',
+      workspaceProjects: () => ({ current: null, projects: [] }),
+      resolveWorkspaceProject: resolve,
+      draft: () => ({}) as never,
+    });
+    const input = {
+      pluginId: 'a.b',
+      method: 'renderer.call',
+      sessionId: null,
+      payload: { method: 'read', args: {} },
+      workspace: { projectId: 'b' },
+    };
+    expect(await h.call(event(), input)).toMatchObject({ ok: true });
+    expect(callUi).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sessionId: null,
+        projectRoot: '/projects/b',
+        generation: undefined,
+      })
+    );
+    expect(await h.call(event(), { ...input, workspace: null })).toMatchObject({ ok: true });
+    expect(callUi).toHaveBeenLastCalledWith(expect.objectContaining({ projectRoot: null }));
+    const count = callUi.mock.calls.length;
+    for (const bad of [
+      { ...input, sessionId: 'another-session' },
+      { ...input, method: 'command.run' },
+      { ...input, workspace: { projectId: 'b', path: '/secret' } },
+      { ...input, workspace: { projectId: 'missing' } },
+    ])
+      expect(await h.call(event(), bad)).toMatchObject({ ok: false });
+    expect(callUi).toHaveBeenCalledTimes(count);
+  });
   it('类型配置与侧栏状态按 unknown 收窄，拒绝污染键和超大 UTF-8', () => {
     expect(parseConfigPatch({ name: 'demo', count: 2, enabled: false, token: null })).toEqual({
       name: 'demo',

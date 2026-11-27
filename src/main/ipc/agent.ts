@@ -1297,6 +1297,17 @@ async function wireNativePluginHost(): Promise<void> {
           (project) => project.kind !== 'ssh'
         ),
       }),
+    listWorkspace: (root) =>
+      listAllSessions({
+        ...sessionSource(),
+        conversations: sessionSource().conversations.filter(
+          (conversation) => pluginProjectRoot(conversation.conversationId) === root
+        ),
+        projects: (sourceAuthority?.projection().projects ?? []).filter(
+          (project) => project.kind !== 'ssh'
+        ),
+      }).filter((session) => !session.archived),
+    workspaceRoot: (id) => (localPluginConversation(id) ? pluginProjectRoot(id) : null),
     status: (id) => {
       if (!localPluginConversation(id))
         return { sessionId: id, state: 'idle', pendingAsks: 0, pendingApprovals: 0 };
@@ -2199,6 +2210,7 @@ export function registerAgentHandlers(): void {
       broadcastAgentEvent({ ...rendererEvent, model: proof.model });
       return;
     }
+    if (workerEvent.type === 'plugin-inject-result') return;
     broadcastAgentEvent(workerEvent);
   });
 

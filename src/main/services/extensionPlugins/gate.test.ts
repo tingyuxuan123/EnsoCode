@@ -96,6 +96,62 @@ const uiCall = () =>
   gate.invocations.create({ pluginId: 'a.b', sessionId: 's1', projectRoot: root, gesture: true });
 
 describe('PluginHostGate', () => {
+  it('lists exact workspace from a UI invocation without a session', async () => {
+    deps.manifest = () => manifest({ permissions: ['session.read'] });
+    deps.sessions = { list: () => [], listWorkspace: vi.fn(() => []) };
+    const inv = gate.invocations.create({
+      pluginId: 'a.b',
+      sessionId: null,
+      projectRoot: root,
+      gesture: true,
+    });
+    await expect(gate.handle('a.b', 'session.list', { scope: 'workspace' }, inv)).resolves.toEqual({
+      current: null,
+      sessions: [],
+    });
+    expect(deps.sessions.listWorkspace).toHaveBeenCalledWith(root);
+  });
+
+  it('awaits an in-flight injection exactly once and rejects workspace changes after waking', async () => {
+    deps.manifest = () => manifest({ permissions: ['agent.inject'] });
+    let finish!: (value: { ok: true }) => void;
+    deps.inject = vi.fn(
+      () =>
+        new Promise<{ ok: true }>((resolve) => {
+          finish = resolve;
+        })
+    );
+    deps.wakeSession = vi.fn(async () => {});
+    const pending = gate.handle(
+      'a.b',
+      'session.inject',
+      { text: 'todo', triggerTurn: true },
+      uiCall()
+    );
+    await Promise.resolve();
+    expect(deps.inject).toHaveBeenCalledTimes(1);
+    expect(deps.wakeSession).not.toHaveBeenCalled();
+    finish({ ok: true });
+    await expect(pending).resolves.toBeNull();
+    deps.sessions = {
+      list: () => [],
+      listWorkspace: () => [{ id: 's1', title: '', updatedAt: 0, state: 'idle' }],
+      workspaceRoot: () => root,
+    };
+    deps.inject = vi.fn(() => ({ ok: false, error: 'cold', notRunning: true }));
+    deps.wakeSession = vi.fn(async () => {
+      deps.sessions!.workspaceRoot = () => outside;
+    });
+    const changed = gate.handle(
+      'a.b',
+      'session.inject',
+      { text: 'todo', sameWorkspace: true },
+      uiCall()
+    );
+    await expect(changed).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect(deps.inject).toHaveBeenCalledTimes(1);
+  });
+
   it('读取授权范围内的项目文件', async () => {
     await expect(
       gate.handle('a.b', 'fs.readText', { path: 'docs/a.md' }, agentCall())

@@ -232,6 +232,7 @@ import {
   createPluginEventsExtension,
   PluginEventInvoker,
 } from './pluginEvents';
+import { PluginInjectionReceiver } from './pluginInjection';
 import { PluginMcpGateway } from './pluginMcpGateway';
 import { progressPreambleExtension } from './progressPreamble';
 import { createProjectSettingsManager } from './projectCode';
@@ -918,6 +919,11 @@ export async function initializeWorkerRuntime(runtime: ModelRuntime): Promise<Mo
 /** 故障域 A：本进程持有全部活会话。同一会话的命令串行，不同会话并行。 */
 export class SessionSupervisor {
   private readonly sessions = new Map<string, ManagedSession>();
+  private readonly pluginInjections = new PluginInjectionReceiver(
+    (id) => this.sessions.get(id),
+    (event) => this.options.emit(event),
+    (managed, error) => this.failTurn(managed, error)
+  );
   private readonly gate = new OperationGate();
   private readonly workspaceSwitch = new WorkspaceSwitchGate(this.sessions);
   private readonly pendingCommands = new Map<string, number>();
@@ -1667,13 +1673,18 @@ export class SessionSupervisor {
         });
       return;
     }
+    if (command.type === 'plugin-inject') {
+      if (this.workspaceSwitch.defer(command.identity.sessionId, () => this.handleCommand(command)))
+        return;
+      this.pluginInjections.receive(command);
+      return;
+    }
     // Intercepts can be waiting inside prompt's input hook; their replies must not queue
     // behind that prompt or a workspace lock. Always bind replies to the exact generation.
     if (
       command.type === 'plugin-tool-result' ||
       command.type === 'plugin-tool-progress' ||
-      command.type === 'plugin-intercept-result' ||
-      command.type === 'plugin-inject'
+      command.type === 'plugin-intercept-result'
     ) {
       const managed = this.sessions.get(command.identity.sessionId);
       if (!managed || !isSameGeneration(managed.identity, command.identity)) return;
@@ -1681,7 +1692,6 @@ export class SessionSupervisor {
       else if (command.type === 'plugin-tool-progress')
         managed.pluginTools?.progress(command.requestId, command.text);
       else if (command.type === 'plugin-intercept-result') managed.pluginEvents?.resolve(command);
-      else if (!managed.parentId) managed.pluginEvents?.deliver(command);
       return;
     }
     const identity =
@@ -3813,6 +3823,11 @@ export class SessionSupervisor {
     managedRef.deviceTools = deviceTools;
     managedRef.pluginTools = pluginToolInvoker;
     managedRef.pluginEvents = pluginEventInvoker;
+    // ExtensionAPI.sendMessage hides Promise rejections as extension_error; bind the raw
+    // session sender so injection launch failures follow the normal session failure path.
+    pluginEventInvoker?.bindSender((message, options) =>
+      session.sendCustomMessage(message, options)
+    );
     if (pluginEventInvoker?.plan.observe.includes('session_start'))
       pluginEventInvoker.notify('session_start', { reason: resumeFile ? 'resume' : 'startup' });
     this.options.emit({

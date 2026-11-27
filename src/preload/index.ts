@@ -1683,11 +1683,20 @@ const electronAPI = {
       patch: Record<string, string | number | boolean | null>
     ): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_CONFIG_SET, id, patch),
+    workspaceProjects: (
+      pluginId: string,
+      sessionId: string | null
+    ): Promise<
+      | ({ ok: true } & import('@shared/extensionPlugins/workspace').PluginWorkspaceProjects)
+      | { ok: false; error: string }
+    > => ipcRenderer.invoke(IPC_CHANNELS.EXTENSION_PLUGINS_WORKSPACE_PROJECTS, pluginId, sessionId),
     call: (request: {
       pluginId: string;
       method: 'command.run' | 'trigger.candidates' | 'trigger.pick' | 'renderer.call';
       payload: Record<string, unknown>;
       sessionId: string | null;
+      /** Detached UI-only project scope; Main resolves registered IDs, never renderer paths. */
+      workspace?: import('@shared/extensionPlugins/workspace').PluginWorkspaceContext | null;
       /** Renderer 在收到调用时读取 navigator.userActivation.isActive；Main 缺省按 false 处理。 */
       gesture?: boolean;
     }): Promise<

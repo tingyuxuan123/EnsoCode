@@ -44,6 +44,7 @@ vi.mock('../services/extensionPlugins', () => ({
   getDraftBroker: () => mocks.draft(),
 }));
 vi.mock('./agent', () => ({
+  getSourceAuthorityRegistry: () => null,
   pluginAuthoringWorkspace: () => null,
   pluginProjectRoot: () => null,
   pluginSessionGeneration: () => null,

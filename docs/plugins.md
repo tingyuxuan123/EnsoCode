@@ -8,7 +8,7 @@
 
 原内置 Wiki 记忆已移除，不会迁移或删除旧 Vault。本机 Git 项目可单独安装 [知识地图](../examples/plugins/llmdoc/README.md) 浏览、检索、复核工程知识。扩展自动检测已有的 Node、Git 和 CLI，缺少 CLI 时由用户点击安装到扩展的私有目录；并在有知识库的项目里，于每轮开始前追加一条只读查阅提醒。初始化和更新通过显式的 Agent 工作流进行，写入与提交需分别确认，不会自动编译聊天记录。
 
-需要偏好、事实、每日日志与待办，可另装 [记忆插件](../examples/plugins/memory/README.md)：独立私有存储、项目隔离、可恢复删除、每轮上下文与可选自动学习/总结，不会自动迁移或改写 Wiki、llmdoc、AGENTS.md 或用户画像。自动整理会调用配置的模型，费用与隐私说明见插件设置和 README。
+需要偏好、事实、每日日志与待办，可另装 [记忆插件](../examples/plugins/memory/README.md)：独立私有存储、项目选择、可恢复删除、每轮上下文与可选自动学习/总结；待办有未开始/进行中/已完成三态，可连图发到同工作区会话，确认接收后变进行中，完成/改写由 Agent 工具显式回写。仅复制不改状态。不自动迁移或改写 Wiki、llmdoc、AGENTS.md 或用户画像。自动整理和显式投递会调用配置的模型，费用与隐私说明见插件设置和 README。
 
 ## 适用范围：本仓库的原生插件 API
 
@@ -190,7 +190,7 @@ MCP 服务名由宿主增加插件命名空间。同类贡献 id/name 不能重�
 - 观察事件、拦截、调度有时限与连续失败熔断；不要把它们当成必然送达的任务队列。
 
 `session.list/status/focus/focusSubagent/openChildRun/create` 只使用会话标识；跨项目列表需 `session.readAll`，切换/创建遵守对应授权与真实用户操作。创建时 `presetId` 只能引用本插件预设。
-`session.inject({text,images?,sessionId?,deliverAs?,triggerTurn?})` 与 `session.abort(sessionId?)` 需要 `agent.inject`；注入最多 4 张支持格式图片。跨会话注入必须由用户额外同意；空闲会话可由真实窗口启动后接收，不能把 UI 乐观显示当执行成功。
+`session.inject({text,images?,sessionId?,deliverAs?,triggerTurn?,sameWorkspace?})` 与 `session.abort(sessionId?)` 需要 `agent.inject`；注入最多 4 张支持格式图片。跨会话需用户额外同意；`sameWorkspace:true` 在唤醒前后按 Main 实际根目录核验目标（worktree 不合并）。空白/冷会话可经真实窗口启动/恢复；Main 等匹配 requestId 与实际代次的 worker 接收回执后返回成功，不等待模型完成。超时/退出不自动重投，压缩中明确拒绝，不能把 UI 乐观显示当执行成功。
 
 ### 插件只读代理
 
@@ -218,6 +218,12 @@ MCP 服务名由宿主增加插件命名空间。同类贡献 id/name 不能重�
 左轨的直接点击不需要先启动模型；没有会话时页面方法只拿到 null 会话/项目上下文，可以管理插件自己的全局数据。它不放开 Node `ui.view.open`、草稿、项目文件或 Agent 等宿主 API 原有的会话与授权要求。
 
 HTML 中 `enso.on(name,listener)` / `onTheme(listener)` 返回取消函数，`enso.storage.get/set/remove` 同步读写页面快照，写入异步持久化。文件查看器同样运行在沙箱，额外有 `enso.file:{rel,text,onChange,update}`；读取的是当前文件编辑区（含未保存内容），`enso.file.update(text)` 只修改这个编辑区，不直接写盘，不能访问任意磁盘文件。插件脚本开始执行时桥已就绪，不需要等待额外 ready 事件。
+
+### 项目选择
+
+沙箱工作区另有 `window.enso.projects.list()` 与 `projects.select(context)`：列表仅返回已登记的本地项目标识、名称与隔离 worktree 标识，`context` 为 `{projectId,conversationId?}`，null 表示全局；选择要求真实用户手势。后续页面方法使用独立的无会话 UI 项目上下文，Main 每次重新推导根目录，不接受路径、不移动插件数据，也不改变后台 Agent 的项目。页面应先处理未保存草稿，切换在途阻止新增/编辑/发送；旧宿主无此接口时明确提示更新。
+
+`session.list({scope:'workspace'})` 需要 `session.read`，按 Main 注入的实际根目录列出会话，支持无会话项目页面；其它 worktree 不会混进来。`scope:'project'/'all'` 保持原来的权限语义。
 
 ### 主题
 

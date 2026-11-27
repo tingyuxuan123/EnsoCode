@@ -323,7 +323,8 @@ describe('complete plugin runtime', () => {
     expect((await tool(service)).content).toBe('ok');
     expect(inject).toHaveBeenCalledWith(
       'other',
-      expect.objectContaining({ pluginId: 'enso.runtime', text: 'hello' })
+      expect.objectContaining({ pluginId: 'enso.runtime', text: 'hello' }),
+      expect.any(AbortSignal)
     );
     expect(service.list().plugins[0].statusItems).toEqual([
       expect.objectContaining({ id: 'counter', text: 'done' }),

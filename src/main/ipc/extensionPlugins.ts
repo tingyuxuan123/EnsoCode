@@ -7,11 +7,19 @@ import type {
   ExtensionPluginReadmeResult,
   PluginAuthoringOptions,
 } from '@shared/extensionPlugins/types';
+import {
+  type PluginWorkspaceProjects,
+  parsePluginWorkspaceContext,
+} from '@shared/extensionPlugins/workspace';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, dialog, ipcMain, webContents } from 'electron';
 import type { DraftBroker } from '../services/extensionPlugins/draftBroker';
 import { PluginAuthoring } from '../services/extensionPlugins/pluginAuthoring';
 import type { ExtensionPluginService, UiCallMethod } from '../services/extensionPlugins/service';
+import {
+  listWorkspaceProjects,
+  resolveWorkspaceProject,
+} from '../services/extensionPlugins/workspaceProjects';
 import { setPluginAssetResolver } from '../services/localImageProtocol';
 import { getWindowWebContents, sendToAllWindows } from '../windows/createAppWindow';
 import { designWindowSession } from '../windows/DesignWindow';
@@ -161,6 +169,8 @@ interface HandlerDeps {
   service(): ExtensionPluginService;
   draft(): DraftBroker;
   projectRoot(sessionId: string): string | null;
+  workspaceProjects?(sessionId: string | null): PluginWorkspaceProjects;
+  resolveWorkspaceProject?(context: unknown): { projectRoot: string | null } | null;
   sessionGeneration?(sessionId: string): string | null;
   signal?(event: PluginSenderEvent): AbortSignal;
   pickPath?(event: PluginSenderEvent, kind: 'file' | 'directory'): Promise<string | null>;
@@ -522,10 +532,19 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
         (raw.sessionId !== null &&
           (typeof raw.sessionId !== 'string' || raw.sessionId.length > 128)) ||
         Object.keys(raw).some(
-          (k) => !['pluginId', 'method', 'payload', 'sessionId', 'gesture'].includes(k)
+          (k) => !['pluginId', 'method', 'payload', 'sessionId', 'gesture', 'workspace'].includes(k)
         )
       )
         return invalid;
+      let projectRoot = typeof raw.sessionId === 'string' ? deps.projectRoot(raw.sessionId) : null;
+      if (Object.hasOwn(raw, 'workspace')) {
+        const context = parsePluginWorkspaceContext(raw.workspace);
+        if (raw.method !== 'renderer.call' || raw.sessionId !== null || context === undefined)
+          return invalid;
+        const resolved = deps.resolveWorkspaceProject?.(context);
+        if (!resolved) return { ok: false, error: '项目已移除或不是有效本地项目' };
+        projectRoot = resolved.projectRoot;
+      }
       return {
         ok: true,
         value: await deps.service().callUi({
@@ -533,7 +552,7 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
           method: raw.method as UiCallMethod,
           payload: raw.payload,
           sessionId: raw.sessionId as string | null,
-          projectRoot: typeof raw.sessionId === 'string' ? deps.projectRoot(raw.sessionId) : null,
+          projectRoot,
           generation:
             typeof raw.sessionId === 'string'
               ? (deps.sessionGeneration?.(raw.sessionId) ?? undefined)
@@ -542,6 +561,16 @@ export function createExtensionPluginHandlers(deps: HandlerDeps) {
           gesture: raw.gesture === true,
         }),
       };
+    }),
+    workspaceProjects: guard((_event, pluginId, sessionId) => {
+      if (!id(pluginId) || !(sessionId === null || token(sessionId))) return invalid;
+      const plugin = deps
+        .service()
+        .list()
+        .plugins.find((item) => item.id === pluginId);
+      if (plugin?.state !== 'enabled' || !plugin.permissions.includes('ui.view')) return deny;
+      const result = deps.workspaceProjects?.(sessionId);
+      return result ? { ok: true, ...result } : { ok: false, error: '项目选择不可用' };
     }),
     draftResponse: guard((e, raw) => {
       deps.draft().respond(e.sender.id, raw);
@@ -618,12 +647,21 @@ export function registerExtensionPluginHandlers(): void {
     (handlers ??= Promise.all([import('../services/extensionPlugins'), import('./agent')]).then(
       ([
         { getExtensionPlugins, getDraftBroker },
-        { pluginAuthoringWorkspace, pluginProjectRoot, pluginSessionGeneration },
+        {
+          pluginAuthoringWorkspace,
+          pluginProjectRoot,
+          pluginSessionGeneration,
+          getSourceAuthorityRegistry,
+        },
       ]) => {
         const authoring = new PluginAuthoring({
           workspace: pluginAuthoringWorkspace,
           hostVersion: app.getVersion(),
           stateRoot: join(app.getPath('userData'), 'plugin-authoring'),
+        });
+        const workspaceSource = () => ({
+          ...(getSourceAuthorityRegistry()?.projection() ?? { projects: [], conversations: [] }),
+          rootForSession: pluginProjectRoot,
         });
         setPluginAssetResolver((id, rel) => getExtensionPlugins().assetMediaPath(id, rel));
         getExtensionPlugins().onChange(() =>
@@ -645,6 +683,8 @@ export function registerExtensionPluginHandlers(): void {
           service: getExtensionPlugins,
           draft: getDraftBroker,
           projectRoot: pluginProjectRoot,
+          workspaceProjects: (origin) => listWorkspaceProjects(workspaceSource(), origin),
+          resolveWorkspaceProject: (context) => resolveWorkspaceProject(workspaceSource(), context),
           sessionGeneration: pluginSessionGeneration,
           signal: (event) => {
             const contents = webContents.fromId(event.sender.id);
@@ -726,6 +766,7 @@ export function registerExtensionPluginHandlers(): void {
     [IPC_CHANNELS.EXTENSION_PLUGINS_CONFIG_GET, 'configGet'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_CONFIG_SET, 'configSet'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_CALL, 'call'],
+    [IPC_CHANNELS.EXTENSION_PLUGINS_WORKSPACE_PROJECTS, 'workspaceProjects'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_DRAFT_RESPONSE, 'draftResponse'],
     [IPC_CHANNELS.EXTENSION_PLUGINS_ASSET, 'asset'],
   ];

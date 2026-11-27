@@ -20,7 +20,10 @@ import { pluginError } from './process';
 import { ExtensionPluginService, type PluginSessionBridge } from './service';
 
 export type { PluginSessionBridge };
-export type PluginSessionDirectory = Required<NonNullable<GateDeps['sessions']>>;
+export type PluginSessionDirectory = Required<
+  Pick<NonNullable<GateDeps['sessions']>, 'list' | 'listAll' | 'status'>
+> &
+  Pick<NonNullable<GateDeps['sessions']>, 'listWorkspace' | 'workspaceRoot'>;
 
 export type PluginMcpBridge = Pick<GateDeps, 'mcpTools' | 'mcpCall'>;
 export type PluginBrowserBridge = (input: PluginBrowserBridgeInput) => Promise<unknown>;
@@ -164,6 +167,8 @@ export function getExtensionPlugins(): ExtensionPluginService {
       sessions: {
         list: (id) => sessionDirectory?.list(id) ?? [],
         listAll: () => sessionDirectory?.listAll() ?? [],
+        listWorkspace: (root) => sessionDirectory?.listWorkspace?.(root) ?? [],
+        workspaceRoot: (id) => sessionDirectory?.workspaceRoot?.(id) ?? null,
         status: (id) =>
           sessionDirectory?.status(id) ?? {
             sessionId: id,

@@ -336,7 +336,7 @@ it('disabled optional overlays fall back while required plugin presets fail; rem
   stopAgentWorker();
 });
 
-it('session bridge replays registration, resolves exact live identity and forwards inject/progress/intercept', () => {
+it('session bridge replays registration, resolves exact live identity and forwards inject/progress/intercept', async () => {
   let bridge: PluginSessionBridge | null = null;
   registerPluginSessionBridge((id) => (id === identity.sessionId ? identity : undefined));
   const runtime = pluginRuntime();
@@ -359,19 +359,39 @@ it('session bridge replays registration, resolves exact live identity and forwar
   expect(
     liveBridge.inject(identity.sessionId, { ...message, text: 'x'.repeat(64 * 1024 + 1) })
   ).toMatchObject({ ok: false });
+  const workerCount = workers.length;
+  const unready = liveBridge.inject(identity.sessionId, message);
+  startAgentWorker();
+  const restarted = workers.at(-1)!;
+  restarted.emit('spawn');
+  const replayed = restarted.posted.filter((command) => command.type === 'plugin-inject');
+  stopAgentWorker();
+  await expect(unready).resolves.toMatchObject({ ok: false });
+  expect(workers).toHaveLength(workerCount + 1);
+  expect(replayed).toEqual([]);
   startAgentWorker();
   const worker = workers.at(-1)!;
   worker.emit('spawn');
-  expect(liveBridge.inject(identity.sessionId, message)).toEqual({ ok: true });
-  expect(worker.posted.at(-1)).toEqual({
+  const injected = liveBridge.inject(identity.sessionId, message);
+  const command = worker.posted.at(-1)!;
+  expect(command).toEqual({
     type: 'plugin-inject',
     identity,
+    requestId: expect.any(String),
     pluginId: 'enso.example',
     pluginName: 'Example',
     text: 'hello',
     deliverAs: 'nextTurn',
     triggerTurn: false,
   });
+  if (command.type !== 'plugin-inject') throw new Error('missing injection');
+  worker.emit('message', {
+    type: 'plugin-inject-result',
+    identity,
+    requestId: command.requestId,
+    ok: true,
+  });
+  await expect(injected).resolves.toEqual({ ok: true });
   sendPluginToolProgressToSession(identity, 'request', 'progress');
   expect(worker.posted.at(-1)).toMatchObject({
     type: 'plugin-tool-progress',

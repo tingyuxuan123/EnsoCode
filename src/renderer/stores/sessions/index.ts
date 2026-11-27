@@ -461,7 +461,7 @@ interface SessionsState {
   resetBtwSession(id: string, rolePrompt: string): Promise<void>;
   disposeBtwConversation(id: string): Promise<void>;
   /** app 重启后从 jsonl 恢复会话并回放历史（未 started 且有 sessionFile 时有效） */
-  resumeConversation(id: string): Promise<void>;
+  resumeConversation(id: string, options?: { allowBlank?: boolean }): Promise<void>;
   /** 上滑加载更早历史：只读 jsonl，不 spawn */
   loadOlderHistory(id: string): Promise<void>;
   /** 可见观察视图保热与惰性补水；返回幂等 release，绝不停止或复活 child。 */
@@ -3509,10 +3509,11 @@ export const useSessionsStore = create<SessionsState>()(
           );
         },
 
-        async resumeConversation(id) {
+        async resumeConversation(id, options) {
           const conversation = get().conversations[id];
           if (
             !conversation ||
+            conversation.parentId ||
             conversation.btwParentId ||
             conversation.started ||
             conversation.spawning ||
@@ -3521,7 +3522,7 @@ export const useSessionsStore = create<SessionsState>()(
           ) {
             return;
           }
-          if (!conversation.sessionFile) return;
+          if (!conversation.sessionFile && !options?.allowBlank) return;
           const settings = useSettingsStore.getState();
           const project = settings.projects.find((p) => p.id === conversation.projectId);
           if (!project) return;
@@ -3568,7 +3569,7 @@ export const useSessionsStore = create<SessionsState>()(
             providerId,
             modelId,
             cwd,
-            resumeFile: conversation.sessionFile,
+            ...(conversation.sessionFile ? { resumeFile: conversation.sessionFile } : {}),
             reasoningEnabled: conversation.reasoningEnabled,
             thinkingLevel: conversation.thinkingLevel,
             loadLocalSkills: settings.loadLocalSkills,
