@@ -9,16 +9,16 @@
       "validatedRevision": "5e6199d3f61b43a4b65e1681a454447d07f4a42d"
     },
     "sessions/message-projection.mdx": {
-      "validatedRevision": "5e6199d3f61b43a4b65e1681a454447d07f4a42d"
+      "validatedRevision": "355c2c71f5240f945c27ad628c6d717accdaf305"
     },
     "plugins/background-agent-runs.mdx": {
-      "validatedRevision": "5e6199d3f61b43a4b65e1681a454447d07f4a42d"
+      "validatedRevision": "355c2c71f5240f945c27ad628c6d717accdaf305"
     },
     "plugins/ui-workspace-scope.mdx": {
-      "validatedRevision": null
+      "validatedRevision": "355c2c71f5240f945c27ad628c6d717accdaf305"
     },
     "plugins/session-injection.mdx": {
-      "validatedRevision": null
+      "validatedRevision": "355c2c71f5240f945c27ad628c6d717accdaf305"
     }
   },
   "convergence": {
